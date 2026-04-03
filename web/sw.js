@@ -1,4 +1,4 @@
-const CACHE_NAME = 'surf-conditions-v1';
+const CACHE_NAME = 'surf-conditions-v3';
 const APP_SHELL = [
   '/SurfConditions/',
   '/SurfConditions/index.html',
