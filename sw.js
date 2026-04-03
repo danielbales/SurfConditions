@@ -1,4 +1,4 @@
-const CACHE_NAME = 'surf-conditions-v3';
+const CACHE_NAME = 'surf-conditions-v4';
 const APP_SHELL = [
   '/SurfConditions/',
   '/SurfConditions/index.html',
@@ -25,20 +25,26 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
+  const isAppShell = url.hostname === self.location.hostname;
 
-  // Network-first for API calls, cache-first for app shell
-  const isAPI = url.hostname !== self.location.hostname;
-
-  if (isAPI) {
+  if (isAppShell) {
+    // Network-first for app shell: always fetch fresh, fall back to cache offline
+    event.respondWith(
+      fetch(event.request)
+        .then(res => {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          return res;
+        })
+        .catch(() => caches.match(event.request))
+    );
+  } else {
+    // Network-first for API calls too
     event.respondWith(
       fetch(event.request)
         .catch(() => new Response(JSON.stringify({ error: 'offline' }), {
           headers: { 'Content-Type': 'application/json' }
         }))
-    );
-  } else {
-    event.respondWith(
-      caches.match(event.request).then(cached => cached || fetch(event.request))
     );
   }
 });
