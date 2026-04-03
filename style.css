@@ -74,6 +74,39 @@ header {
 .refresh-btn.spinning .icon { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Location selector */
+.location-selector {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.location-selector::-webkit-scrollbar { display: none; }
+
+.loc-btn {
+  flex-shrink: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--text-secondary);
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.loc-btn.active {
+  background: var(--accent-teal);
+  border-color: var(--accent-teal);
+  color: #0a1628;
+  font-weight: 700;
+}
+.loc-btn:active { opacity: 0.75; }
+
 /* Last updated */
 .last-updated {
   text-align: center;

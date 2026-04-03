@@ -1,8 +1,31 @@
-// ─── Config ───────────────────────────────────────────────────────────────────
-const LAT = 36.6;
-const LNG = -121.9;
-const NOAA_STATION = '9413450';
-const BUOY_ID = '46240';
+// ─── Locations ────────────────────────────────────────────────────────────────
+const LOCATIONS = [
+  { id: 'carmel',   name: 'Carmel',   lat: 36.5535, lng: -121.9255, tideStation: '9413450', marineZone: 'PZZ535' },
+  { id: 'asilomar', name: 'Asilomar', lat: 36.6213, lng: -121.9427, tideStation: '9413450', marineZone: 'PZZ535' },
+  { id: 'bigsur',   name: 'Big Sur',  lat: 36.2344, lng: -121.8173, tideStation: '9413450', marineZone: 'PZZ565' },
+];
+
+const savedId = localStorage.getItem('surf_location') || 'carmel';
+let ACTIVE = LOCATIONS.find(l => l.id === savedId) || LOCATIONS[0];
+
+function setLocation(id) {
+  ACTIVE = LOCATIONS.find(l => l.id === id) || LOCATIONS[0];
+  localStorage.setItem('surf_location', ACTIVE.id);
+  // Update selector UI
+  document.querySelectorAll('.loc-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.id === ACTIVE.id);
+  });
+  // Update subtitle
+  const sub = document.getElementById('location-subtitle');
+  if (sub) sub.textContent = `${ACTIVE.name} · ${ACTIVE.lat.toFixed(1)}°N ${Math.abs(ACTIVE.lng).toFixed(1)}°W`;
+  refreshAll();
+}
+
+// Convenience accessors used throughout
+function LAT()          { return ACTIVE.lat; }
+function LNG()          { return ACTIVE.lng; }
+function NOAA_STATION() { return ACTIVE.tideStation; }
+function MARINE_ZONE()  { return ACTIVE.marineZone; }
 
 // ─── Service Worker ───────────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
@@ -98,7 +121,7 @@ async function loadBuoy() {
     // Use Open-Meteo Marine API (CORS-enabled) for current wave observations.
     const currentVars = 'wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_direction,swell_wave_period';
     const hourlyVars  = 'sea_surface_temperature';
-    const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${LAT}&longitude=${LNG}`
+    const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${LAT()}&longitude=${LNG()}`
       + `&current=${currentVars}&hourly=${hourlyVars}`
       + `&length_unit=imperial&timezone=America%2FLos_Angeles&forecast_days=1`;
     const res = await fetch(url);
@@ -160,7 +183,7 @@ async function loadBuoy() {
 // ─── 2. Open-Meteo Marine (Swell) ─────────────────────────────────────────────
 async function loadSwell() {
   try {
-    const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${LAT}&longitude=${LNG}`
+    const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${LAT()}&longitude=${LNG()}`
       + `&hourly=wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period,swell_wave_direction`
       + `&wind_speed_unit=kn&length_unit=imperial&timezone=America%2FLos_Angeles&forecast_days=2&models=best_match`;
     const res = await fetch(url);
@@ -235,7 +258,7 @@ async function loadSwell() {
 // ─── 3. Open-Meteo Weather (Wind + UV) ────────────────────────────────────────
 async function loadWeather() {
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LNG}`
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT()}&longitude=${LNG()}`
       + `&hourly=wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index`
       + `&wind_speed_unit=kn&timezone=America%2FLos_Angeles&forecast_days=1`;
     const res = await fetch(url);
@@ -344,7 +367,7 @@ async function loadTides() {
     const endStr = `${tomorrow.getFullYear()}${pad(tomorrow.getMonth()+1)}${pad(tomorrow.getDate())}`;
 
     const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter`
-      + `?begin_date=${dateStr}&end_date=${endStr}&station=${NOAA_STATION}`
+      + `?begin_date=${dateStr}&end_date=${endStr}&station=${NOAA_STATION()}`
       + `&product=predictions&datum=MLLW&time_zone=lst_ldt&interval=hilo&units=english&application=web_services&format=json`;
 
     const res = await fetch(url);
@@ -357,7 +380,7 @@ async function loadTides() {
 
     // Also fetch current water level
     const lvlUrl = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter`
-      + `?date=latest&station=${NOAA_STATION}`
+      + `?date=latest&station=${NOAA_STATION()}`
       + `&product=water_level&datum=MLLW&time_zone=lst_ldt&units=english&application=web_services&format=json`;
     let currentLevel = null;
     try {
@@ -432,7 +455,7 @@ async function loadTides() {
       <div class="divider"></div>
       <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Today's Schedule</div>
       <div class="tide-schedule">${scheduleHTML || '<div class="error-msg">No tide data for today</div>'}</div>
-      <div class="buoy-source">Monterey Harbor · NOAA Station ${NOAA_STATION} · MLLW datum</div>
+      <div class="buoy-source">Monterey Harbor · NOAA Station ${NOAA_STATION()} · MLLW datum</div>
     `);
   } catch (e) {
     setHTML('tides-body', errorHTML('Tide data unavailable: ' + e.message));
@@ -442,7 +465,7 @@ async function loadTides() {
 // ─── 5. Sunrise / Sunset ──────────────────────────────────────────────────────
 async function loadSunMoon() {
   try {
-    const url = `https://api.sunrise-sunset.org/json?lat=${LAT}&lng=${LNG}&formatted=0`;
+    const url = `https://api.sunrise-sunset.org/json?lat=${LAT()}&lng=${LNG()}&formatted=0`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const d = await res.json();
@@ -516,7 +539,7 @@ async function loadSunMoon() {
 async function loadNWS() {
   try {
     // Get the gridpoint for our location
-    const ptRes = await fetch(`https://api.weather.gov/points/${LAT},${LNG}`);
+    const ptRes = await fetch(`https://api.weather.gov/points/${LAT()},${LNG()}`);
     if (!ptRes.ok) throw new Error(`Points API: HTTP ${ptRes.ok}`);
     const ptData = await ptRes.json();
 
@@ -551,9 +574,10 @@ async function loadMarineForecast() {
     const fullText = prodData.productText;
     if (!fullText) throw new Error('No product text');
 
-    // Step 3: Extract the PZZ535 (Monterey Bay) section
-    const zoneIdx = fullText.indexOf('PZZ535-');
-    if (zoneIdx === -1) throw new Error('PZZ535 zone not found in CWF');
+    // Step 3: Extract the active location's marine zone section
+    const zone = MARINE_ZONE();
+    const zoneIdx = fullText.indexOf(zone + '-');
+    if (zoneIdx === -1) throw new Error(`${zone} zone not found in CWF`);
 
     const afterZone = fullText.slice(zoneIdx);
     const sectionLines = afterZone.split('\n');
@@ -669,6 +693,13 @@ async function refreshAll() {
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
+// Sync selector UI and subtitle to the saved/active location before first load
+document.querySelectorAll('.loc-btn').forEach(btn => {
+  btn.classList.toggle('active', btn.dataset.id === ACTIVE.id);
+});
+const _sub = document.getElementById('location-subtitle');
+if (_sub) _sub.textContent = `${ACTIVE.name} · ${ACTIVE.lat.toFixed(1)}°N ${Math.abs(ACTIVE.lng).toFixed(1)}°W`;
+
 refreshAll();
 
 // Auto-refresh every 10 minutes
