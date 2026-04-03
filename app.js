@@ -359,103 +359,162 @@ async function loadTides() {
   try {
     const today = new Date();
     const pad = n => String(n).padStart(2, '0');
-    const dateStr = `${today.getFullYear()}${pad(today.getMonth()+1)}${pad(today.getDate())}`;
+    const fmtDate = d => `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
+    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+    const base = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter`
+      + `?begin_date=${fmtDate(today)}&end_date=${fmtDate(tomorrow)}&station=${NOAA_STATION()}`
+      + `&datum=MLLW&time_zone=lst_ldt&units=english&application=web_services&format=json`;
 
-    // Fetch predictions for today + tomorrow
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const endStr = `${tomorrow.getFullYear()}${pad(tomorrow.getMonth()+1)}${pad(tomorrow.getDate())}`;
+    // Fetch hourly curve data and hi/lo events in parallel
+    const [hourlyRes, hiloRes] = await Promise.all([
+      fetch(base + '&product=predictions&interval=h'),
+      fetch(base + '&product=predictions&interval=hilo'),
+    ]);
+    if (!hourlyRes.ok || !hiloRes.ok) throw new Error('HTTP error');
+    const [hourlyData, hiloData] = await Promise.all([hourlyRes.json(), hiloRes.json()]);
+    if (hourlyData.error) throw new Error(hourlyData.error.message);
 
-    const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter`
-      + `?begin_date=${dateStr}&end_date=${endStr}&station=${NOAA_STATION()}`
-      + `&product=predictions&datum=MLLW&time_zone=lst_ldt&interval=hilo&units=english&application=web_services&format=json`;
-
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const d = await res.json();
-    if (d.error) throw new Error(d.error.message);
-
-    const predictions = d.predictions;
+    const hourly = hourlyData.predictions.map(p => ({ t: new Date(p.t), v: parseFloat(p.v) }));
+    const events = hiloData.predictions.map(p => ({ t: new Date(p.t), v: parseFloat(p.v), type: p.type }));
     const now = new Date();
 
-    // Also fetch current water level
-    const lvlUrl = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter`
-      + `?date=latest&station=${NOAA_STATION()}`
-      + `&product=water_level&datum=MLLW&time_zone=lst_ldt&units=english&application=web_services&format=json`;
-    let currentLevel = null;
-    try {
-      const lvlRes = await fetch(lvlUrl);
-      const lvlData = await lvlRes.json();
-      if (lvlData.data && lvlData.data.length > 0) {
-        currentLevel = parseFloat(lvlData.data[lvlData.data.length - 1].v);
-      }
-    } catch (_) {}
+    // ── SVG line chart ──────────────────────────────────────────────────────
+    const W = 320, H = 110, PL = 30, PR = 8, PT = 12, PB = 20;
+    const chartW = W - PL - PR, chartH = H - PT - PB;
 
-    // Find next high/low
-    const upcoming = predictions.filter(p => new Date(p.t) > now).slice(0, 4);
-    const prev = predictions.filter(p => new Date(p.t) <= now);
-    const lastPrev = prev[prev.length - 1];
-    const nextEvent = upcoming[0];
+    // Window: 6 hours before now to 18 hours after (24hr total)
+    const tStart = new Date(now.getTime() - 6 * 3600000);
+    const tEnd   = new Date(now.getTime() + 18 * 3600000);
 
-    // Determine rising/falling
-    let trend = '—';
-    if (lastPrev && nextEvent) {
-      trend = parseFloat(nextEvent.v) > parseFloat(lastPrev.v) ? '↑ Rising' : '↓ Falling';
+    const visible = hourly.filter(p => p.t >= tStart && p.t <= tEnd);
+    if (visible.length < 2) throw new Error('Not enough data');
+
+    const allVals = visible.map(p => p.v);
+    const minV = Math.min(...allVals) - 0.3;
+    const maxV = Math.max(...allVals) + 0.3;
+    const tRange = tEnd - tStart;
+
+    const tx = t => PL + ((t - tStart) / tRange) * chartW;
+    const ty = v => PT + (1 - (v - minV) / (maxV - minV)) * chartH;
+
+    // Build smooth SVG path using cubic bezier
+    const pts = visible.map(p => [tx(p.t), ty(p.v)]);
+    let pathD = `M ${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+    for (let i = 1; i < pts.length; i++) {
+      const cpx = (pts[i-1][0] + pts[i][0]) / 2;
+      pathD += ` C ${cpx.toFixed(1)},${pts[i-1][1].toFixed(1)} ${cpx.toFixed(1)},${pts[i][1].toFixed(1)} ${pts[i][0].toFixed(1)},${pts[i][1].toFixed(1)}`;
     }
 
-    // Tide bar: interpolate between surrounding events
-    let pct = 50;
-    if (lastPrev && nextEvent) {
-      const lo = Math.min(parseFloat(lastPrev.v), parseFloat(nextEvent.v));
-      const hi = Math.max(parseFloat(lastPrev.v), parseFloat(nextEvent.v));
-      const range = hi - lo || 1;
-      if (currentLevel !== null) {
-        pct = Math.max(0, Math.min(100, ((currentLevel - lo) / range) * 100));
+    // Fill area under curve
+    const fillD = pathD
+      + ` L ${pts[pts.length-1][0].toFixed(1)},${(PT + chartH).toFixed(1)}`
+      + ` L ${pts[0][0].toFixed(1)},${(PT + chartH).toFixed(1)} Z`;
+
+    // "Now" marker
+    const nowX = tx(now).toFixed(1);
+    const nowV = (() => {
+      // Interpolate current level from hourly data
+      for (let i = 1; i < visible.length; i++) {
+        if (visible[i].t >= now) {
+          const frac = (now - visible[i-1].t) / (visible[i].t - visible[i-1].t);
+          return visible[i-1].v + frac * (visible[i].v - visible[i-1].v);
+        }
       }
-    }
+      return visible[visible.length-1].v;
+    })();
+    const nowY = ty(nowV).toFixed(1);
 
-    // All events today
-    const todayStr = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
-    const todayEvents = predictions.filter(p => p.t.startsWith(todayStr));
-
-    const scheduleHTML = todayEvents.map(p => {
-      const isHigh = p.type === 'H';
-      const timeStr = fmtTime(new Date(p.t));
-      const ht = parseFloat(p.v).toFixed(2);
+    // Hi/Lo markers within window
+    const visibleEvents = events.filter(e => e.t >= tStart && e.t <= tEnd);
+    const eventMarkers = visibleEvents.map(e => {
+      const ex = tx(e.t).toFixed(1);
+      const ey = ty(e.v).toFixed(1);
+      const isHigh = e.type === 'H';
+      const color = isHigh ? '#9b6dff' : '#1e90ff';
+      const labelY = isHigh ? (parseFloat(ey) - 8).toFixed(1) : (parseFloat(ey) + 14).toFixed(1);
       return `
-        <div class="tide-event">
-          <span class="type-badge ${isHigh ? 'high' : 'low'}">${isHigh ? 'High' : 'Low'}</span>
-          <span class="time">${timeStr}</span>
-          <span class="height">${ht} ft</span>
-        </div>`;
+        <circle cx="${ex}" cy="${ey}" r="3.5" fill="${color}" stroke="#0f1f3d" stroke-width="1.5"/>
+        <text x="${ex}" y="${labelY}" text-anchor="middle" font-size="8" fill="${color}" font-weight="600">${e.v.toFixed(1)}ft</text>`;
     }).join('');
 
-    const isRising = trend.includes('↑');
-    const currentDisplay = currentLevel !== null
-      ? `<span class="height">${currentLevel.toFixed(2)} ft</span><span class="status-text">${trend}</span>`
-      : `<span class="status-text">${trend}</span>`;
+    // X-axis hour labels (every 6h)
+    let xLabels = '';
+    for (let h = 0; h <= 24; h += 6) {
+      const t = new Date(tStart.getTime() + h * 3600000);
+      const x = tx(t).toFixed(1);
+      const lbl = t.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true }).replace(' ', '');
+      xLabels += `<text x="${x}" y="${(H - 4).toFixed(1)}" text-anchor="middle" font-size="8" fill="#4a7a96">${lbl}</text>`;
+    }
+
+    // Y-axis labels
+    const yMid = (minV + maxV) / 2;
+    const yLabels = [minV + 0.3, yMid, maxV - 0.3].map(v => {
+      const y = ty(v).toFixed(1);
+      return `<text x="${(PL - 3).toFixed(1)}" y="${y}" text-anchor="end" dominant-baseline="middle" font-size="8" fill="#4a7a96">${v.toFixed(1)}</text>`;
+    }).join('');
+
+    const svg = `
+      <svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">
+        <defs>
+          <linearGradient id="tideFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#1e90ff" stop-opacity="0.25"/>
+            <stop offset="100%" stop-color="#1e90ff" stop-opacity="0.02"/>
+          </linearGradient>
+        </defs>
+        <!-- fill -->
+        <path d="${fillD}" fill="url(#tideFill)"/>
+        <!-- curve -->
+        <path d="${pathD}" fill="none" stroke="#1e90ff" stroke-width="2" stroke-linejoin="round"/>
+        <!-- now line -->
+        <line x1="${nowX}" y1="${PT}" x2="${nowX}" y2="${PT + chartH}" stroke="#00d4aa" stroke-width="1.5" stroke-dasharray="3,3"/>
+        <!-- now dot -->
+        <circle cx="${nowX}" cy="${nowY}" r="4" fill="#00d4aa" stroke="#0f1f3d" stroke-width="1.5"/>
+        <!-- now label -->
+        <text x="${nowX}" y="${(parseFloat(nowY) - 8).toFixed(1)}" text-anchor="middle" font-size="8" fill="#00d4aa" font-weight="700">${nowV.toFixed(1)}ft</text>
+        <!-- hi/lo markers -->
+        ${eventMarkers}
+        <!-- x labels -->
+        ${xLabels}
+        <!-- y labels -->
+        ${yLabels}
+      </svg>`;
+
+    // Today's schedule
+    const todayStr = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
+    const todayEvents = events.filter(e => e.t.toISOString().slice(0,10) === today.toISOString().slice(0,10)
+      || e.t.toLocaleDateString() === today.toLocaleDateString());
+    const scheduleHTML = events
+      .filter(e => {
+        const d = e.t;
+        return d.getFullYear() === today.getFullYear()
+          && d.getMonth() === today.getMonth()
+          && d.getDate() === today.getDate();
+      })
+      .map(e => {
+        const isHigh = e.type === 'H';
+        return `
+          <div class="tide-event">
+            <span class="type-badge ${isHigh ? 'high' : 'low'}">${isHigh ? 'High' : 'Low'}</span>
+            <span class="time">${fmtTime(e.t)}</span>
+            <span class="height">${e.v.toFixed(2)} ft</span>
+          </div>`;
+      }).join('');
+
+    const trend = (() => {
+      const next = events.find(e => e.t > now);
+      if (!next) return '';
+      return next.type === 'H' ? '↑ Rising' : '↓ Falling';
+    })();
 
     setHTML('tides-body', `
-      <div class="tide-status">
-        <div class="tide-arrow">${isRising ? '↑' : '↓'}</div>
-        <div class="tide-now">
-          ${currentDisplay}
-        </div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+        <span style="font-size:22px;font-weight:700;color:#1e90ff">${nowV.toFixed(2)}<span style="font-size:12px;color:var(--text-muted)"> ft</span></span>
+        <span style="font-size:12px;color:var(--text-secondary)">${trend}</span>
       </div>
-      <div class="tide-bar-wrap">
-        <div class="tide-bar-track">
-          <div class="tide-bar-fill" style="width:${pct}%"></div>
-          <div class="tide-bar-dot" style="left:${pct}%"></div>
-        </div>
-        <div class="tide-bar-labels">
-          <span>Low</span>
-          <span>High</span>
-        </div>
-      </div>
-      <div class="divider"></div>
-      <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Today's Schedule</div>
-      <div class="tide-schedule">${scheduleHTML || '<div class="error-msg">No tide data for today</div>'}</div>
-      <div class="buoy-source">Monterey Harbor · NOAA Station ${NOAA_STATION()} · MLLW datum</div>
+      ${svg}
+      <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin:10px 0 5px">Today's Schedule</div>
+      <div class="tide-schedule">${scheduleHTML || '<div class="error-msg">No events today</div>'}</div>
+      <div class="buoy-source" style="margin-top:6px">NOAA Station ${NOAA_STATION()} · MLLW</div>
     `);
   } catch (e) {
     setHTML('tides-body', errorHTML('Tide data unavailable: ' + e.message));
