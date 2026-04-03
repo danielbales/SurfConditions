@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#071020"/>
+      <stop offset="100%" stop-color="#0f1f3d"/>
+    </linearGradient>
+    <linearGradient id="wave" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#00d4aa" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#1e90ff" stop-opacity="0.7"/>
+    </linearGradient>
+    <clipPath id="rr"><rect width="512" height="512" rx="90"/></clipPath>
+  </defs>
+  <rect width="512" height="512" rx="90" fill="url(#bg)"/>
+  <g clip-path="url(#rr)">
+    <path d="M0,317 Q64,285 128,317 Q192,349 256,317 Q320,285 384,317 Q448,349 512,317 L512,512 L0,512 Z" fill="url(#wave)"/>
+    <path d="M0,355 Q64,323 128,355 Q192,387 256,355 Q320,323 384,355 Q448,387 512,355 L512,512 L0,512 Z" fill="#1e90ff" opacity="0.35"/>
+  </g>
+  <text x="256" y="240" font-family="-apple-system,sans-serif" font-size="190" text-anchor="middle" dominant-baseline="middle">🌊</text>
+</svg>

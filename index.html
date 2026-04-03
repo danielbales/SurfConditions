@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0a1628">
+  <meta name="description" content="Real-time surf conditions for Monterey Bay">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Surf">
+  <title>Surf Conditions — Monterey</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>🌊 Surf Conditions</h1>
+    <div class="subtitle">Monterey Bay · 36.6°N 121.9°W</div>
+  </div>
+  <button class="refresh-btn" id="refreshBtn" onclick="refreshAll()">
+    <span class="icon">↻</span> Refresh
+  </button>
+</header>
+
+<div class="last-updated" id="lastUpdated">Loading…</div>
+
+<main>
+
+  <!-- NOAA Buoy (measured) -->
+  <div class="card" id="card-buoy">
+    <div class="card-header">
+      <div class="card-title"><span class="icon">📡</span> NOAA Buoy 46042</div>
+      <div class="card-badge" id="buoy-badge" style="background:rgba(0,212,170,0.15);color:#00d4aa">LIVE</div>
+    </div>
+    <div class="card-body" id="buoy-body">
+      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+    </div>
+  </div>
+
+  <!-- Swell (Open-Meteo Marine) -->
+  <div class="card" id="card-swell">
+    <div class="card-header">
+      <div class="card-title"><span class="icon">🌊</span> Swell Forecast</div>
+      <div class="card-badge" style="background:rgba(30,144,255,0.15);color:#1e90ff">OPEN-METEO</div>
+    </div>
+    <div class="card-body" id="swell-body">
+      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+    </div>
+  </div>
+
+  <!-- Wind -->
+  <div class="card" id="card-wind">
+    <div class="card-header">
+      <div class="card-title"><span class="icon">💨</span> Wind</div>
+      <div class="card-badge" id="wind-badge" style="background:rgba(0,200,83,0.15);color:#00c853">CALM</div>
+    </div>
+    <div class="card-body" id="wind-body">
+      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+    </div>
+  </div>
+
+  <!-- Tides -->
+  <div class="card" id="card-tides">
+    <div class="card-header">
+      <div class="card-title"><span class="icon">🌊</span> Tides · Station 9413450</div>
+      <div class="card-badge" style="background:rgba(155,109,255,0.15);color:#9b6dff">NOAA</div>
+    </div>
+    <div class="card-body" id="tides-body">
+      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+    </div>
+  </div>
+
+  <!-- Sun & Moon -->
+  <div class="card" id="card-sunmoon">
+    <div class="card-header">
+      <div class="card-title"><span class="icon">☀️</span> Sun &amp; Moon</div>
+    </div>
+    <div class="card-body" id="sunmoon-body">
+      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+    </div>
+  </div>
+
+  <!-- UV Index -->
+  <div class="card" id="card-uv">
+    <div class="card-header">
+      <div class="card-title"><span class="icon">🔆</span> UV Index</div>
+      <div class="card-badge" id="uv-badge" style="background:rgba(0,200,83,0.15);color:#00c853">LOW</div>
+    </div>
+    <div class="card-body" id="uv-body">
+      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+    </div>
+  </div>
+
+  <!-- Marine Forecast (NWS) -->
+  <div class="card" id="card-marine">
+    <div class="card-header">
+      <div class="card-title"><span class="icon">⚓</span> Marine Forecast</div>
+      <div class="card-badge" style="background:rgba(30,144,255,0.15);color:#1e90ff">NWS</div>
+    </div>
+    <div class="card-body" id="marine-body">
+      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+    </div>
+  </div>
+
+  <!-- Rip Current -->
+  <div class="card" id="card-rip">
+    <div class="card-header">
+      <div class="card-title"><span class="icon">⚠️</span> Rip Current Risk</div>
+      <div class="card-badge" id="rip-badge" style="background:rgba(0,200,83,0.15);color:#00c853">LOW</div>
+    </div>
+    <div class="card-body" id="rip-body">
+      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+    </div>
+  </div>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
