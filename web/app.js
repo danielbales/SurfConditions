@@ -91,70 +91,69 @@ function getMoonPhase(date = new Date()) {
   return { name, icon, phase, fraction, daysToFull: Math.round(daysToFull) };
 }
 
-// ─── 1. NOAA Buoy 46240 (Point Sur) ──────────────────────────────────────────
+// ─── 1. Wave Observations (Open-Meteo Marine current) ───────────────────────
 async function loadBuoy() {
   try {
-    // Use a CORS proxy to fetch NDBC text data
-    const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://www.ndbc.noaa.gov/data/realtime2/${BUOY_ID}.txt`)}`;
+    // NDBC realtime data requires a CORS proxy which is unreliable in browsers.
+    // Use Open-Meteo Marine API (CORS-enabled) for current wave observations.
+    const currentVars = 'wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_direction,swell_wave_period';
+    const hourlyVars  = 'sea_surface_temperature';
+    const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${LAT}&longitude=${LNG}`
+      + `&current=${currentVars}&hourly=${hourlyVars}`
+      + `&length_unit=imperial&timezone=America%2FLos_Angeles&forecast_days=1`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
-    const lines = text.trim().split('\n');
+    const d = await res.json();
 
-    // Line 0 = header names, line 1 = units, line 2+ = data
-    // Find first data line that isn't MM (missing)
-    let data = null;
-    for (let i = 2; i < Math.min(10, lines.length); i++) {
-      const cols = lines[i].trim().split(/\s+/);
-      if (cols[8] !== 'MM') { data = cols; break; }
+    const c = d.current;
+    const wvhtFt = c.wave_height?.toFixed(1) ?? '—';
+    const dpd    = c.wave_period?.toFixed(0) ?? '—';
+    const mwd    = c.wave_direction ?? null;
+    const dirStr = mwd !== null ? degToCompass(mwd) : '—';
+    const swHt   = c.swell_wave_height?.toFixed(1) ?? '—';
+    const swPer  = c.swell_wave_period?.toFixed(0) ?? '—';
+    const swDir  = c.swell_wave_direction ?? null;
+
+    // Get current hour SST from hourly
+    const now = new Date();
+    const hours = d.hourly.time;
+    let sstC = null;
+    for (let i = 0; i < hours.length; i++) {
+      if (new Date(hours[i]) <= now) sstC = d.hourly.sea_surface_temperature[i];
     }
-    if (!data) throw new Error('No valid buoy data');
-
-    // Header: #YY  MM DD hh mm WDIR WSPD GST  WVHT   DPD   APD MWD   PRES  ATMP  WTMP  DEWP  VIS PTDY  TIDE
-    // Index:   0   1  2  3  4   5    6    7    8     9    10   11   12    13    14    15   16   17   18
-    const wvht = parseFloat(data[8]);   // wave height meters
-    const dpd  = parseFloat(data[9]);   // dominant period seconds
-    const apd  = parseFloat(data[10]);  // avg period
-    const mwd  = parseInt(data[11]);    // mean wave direction
-    const wtmp = parseFloat(data[14]);  // water temp °C
-    const atmp = parseFloat(data[13]);  // air temp °C
-
-    const wvhtFt = isNaN(wvht) ? 'N/A' : metersToFeet(wvht).toFixed(1);
-    const wtmpF  = isNaN(wtmp) ? 'N/A' : (wtmp * 9/5 + 32).toFixed(0);
-    const atmpF  = isNaN(atmp) ? 'N/A' : (atmp * 9/5 + 32).toFixed(0);
-    const dirStr = isNaN(mwd) ? '—' : degToCompass(mwd);
+    const sstF = sstC !== null && sstC !== undefined ? (sstC * 9/5 + 32).toFixed(0) : '—';
 
     setHTML('buoy-body', `
       <div class="stat-row">
         <span class="stat-value" style="color:#00d4aa">${wvhtFt}</span>
-        ${wvhtFt !== 'N/A' ? '<span class="stat-unit">ft</span>' : ''}
+        ${wvhtFt !== '—' ? '<span class="stat-unit">ft</span>' : ''}
       </div>
-      <div class="stat-label">Significant Wave Height (measured)</div>
+      <div class="stat-label">Significant Wave Height (model)</div>
       <div class="stats-grid">
         <div class="stat-cell">
           <div class="label">Period</div>
-          <div class="value">${isNaN(dpd) ? '—' : dpd.toFixed(0)}<span style="font-size:12px;color:var(--text-muted)">s</span></div>
-          <div class="sub">dominant</div>
+          <div class="value">${dpd}<span style="font-size:12px;color:var(--text-muted)">s</span></div>
         </div>
         <div class="stat-cell">
-          <div class="label">Avg Period</div>
-          <div class="value">${isNaN(apd) ? '—' : apd.toFixed(1)}<span style="font-size:12px;color:var(--text-muted)">s</span></div>
+          <div class="label">Swell</div>
+          <div class="value">${swHt}<span style="font-size:12px;color:var(--text-muted)">ft</span></div>
+          <div class="sub">${swPer}s · ${swDir !== null ? degToCompass(swDir) : '—'}</div>
         </div>
         <div class="stat-cell">
           <div class="label">Direction</div>
           <div class="value small">${dirStr}</div>
-          <div class="sub">${isNaN(mwd) ? '' : mwd + '°'}</div>
+          <div class="sub">${mwd !== null ? mwd + '°' : ''}</div>
         </div>
         <div class="stat-cell">
           <div class="label">Water Temp</div>
-          <div class="value">${wtmpF}<span style="font-size:12px;color:var(--text-muted)">${wtmpF === 'N/A' ? '' : '°F'}</span></div>
-          <div class="sub">${isNaN(wtmp) ? '' : wtmp.toFixed(1) + '°C'}</div>
+          <div class="value">${sstF}<span style="font-size:12px;color:var(--text-muted)">${sstF !== '—' ? '°F' : ''}</span></div>
+          <div class="sub">${sstC !== null && sstC !== undefined ? sstC.toFixed(1) + '°C' : ''}</div>
         </div>
       </div>
-      <div class="buoy-source">46240 · Point Sur · ~10nm offshore · ${atmpF === 'N/A' ? '' : 'Air ' + atmpF + '°F'}</div>
+      <div class="buoy-source">Open-Meteo Marine · Monterey Bay · model data</div>
     `);
   } catch (e) {
-    setHTML('buoy-body', errorHTML('Buoy data unavailable: ' + e.message));
+    setHTML('buoy-body', errorHTML('Wave data unavailable: ' + e.message));
   }
 }
 
@@ -534,19 +533,59 @@ async function loadNWS() {
 
 async function loadMarineForecast() {
   try {
-    // PZZ535 = Monterey Bay marine zone
-    const url = `https://api.weather.gov/zones/forecast/PZZ535/forecast`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const d = await res.json();
+    // Step 1: Get the latest CWF product from MTR (San Francisco/Monterey office)
+    const listRes = await fetch('https://api.weather.gov/products/types/CWF/locations/MTR', {
+      headers: { 'User-Agent': 'SurfConditionsApp/1.0', 'Accept': 'application/geo+json' }
+    });
+    if (!listRes.ok) throw new Error(`HTTP ${listRes.status}`);
+    const listData = await listRes.json();
+    const firstID = listData['@graph']?.[0]?.id;
+    if (!firstID) throw new Error('No CWF products found');
 
-    const periods = d.properties.periods.slice(0, 3);
-    const html = periods.map(p => `
-      <div style="margin-bottom:10px">
-        <div style="font-size:11px;font-weight:600;color:var(--accent-blue);margin-bottom:3px">${p.name}</div>
-        <div class="forecast-text">${p.detailedForecast || p.body || '—'}</div>
-      </div>
-    `).join('');
+    // Step 2: Fetch the product text
+    const prodRes = await fetch(`https://api.weather.gov/products/${firstID}`, {
+      headers: { 'User-Agent': 'SurfConditionsApp/1.0' }
+    });
+    if (!prodRes.ok) throw new Error(`HTTP ${prodRes.status}`);
+    const prodData = await prodRes.json();
+    const fullText = prodData.productText;
+    if (!fullText) throw new Error('No product text');
+
+    // Step 3: Extract the PZZ535 (Monterey Bay) section
+    const zoneIdx = fullText.indexOf('PZZ535-');
+    if (zoneIdx === -1) throw new Error('PZZ535 zone not found in CWF');
+
+    const afterZone = fullText.slice(zoneIdx);
+    const sectionLines = afterZone.split('\n');
+    const body = [];
+    for (const line of sectionLines) {
+      if (line.startsWith('$$')) break;
+      body.push(line);
+    }
+    // Drop first 3 lines (zone ID, zone name, issuance time)
+    const forecastText = body.slice(3).join('\n').trim();
+    if (!forecastText) throw new Error('Empty forecast section');
+
+    // Split into period blocks by lines starting with "."
+    const blocks = forecastText.split(/\n(?=\.)/).filter(b => b.trim());
+    const html = blocks.slice(0, 4).map(block => {
+      const raw = block.trim().replace(/^\./, '');
+      // CWF format: "TONIGHT...forecast text" or "SAT...forecast text"
+      const dotdot = raw.indexOf('...');
+      let title, detail;
+      if (dotdot !== -1) {
+        title = raw.slice(0, dotdot).trim();
+        detail = raw.slice(dotdot + 3).replace(/\n/g, ' ').trim();
+      } else {
+        title = raw.split('\n')[0].trim();
+        detail = raw.split('\n').slice(1).join(' ').trim();
+      }
+      return `
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;font-weight:600;color:var(--accent-blue);margin-bottom:3px">${title}</div>
+          <div class="forecast-text">${detail}</div>
+        </div>`;
+    }).join('');
 
     setHTML('marine-body', html || errorHTML('No forecast periods available'));
   } catch (e) {
