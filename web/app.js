@@ -225,7 +225,7 @@ async function loadSwell() {
     setHTML('swell-body', `
       <div class="swell-compass">
         <div class="compass-rose" title="${wvDir}°">
-          <span style="display:inline-block;transform:rotate(${wvDir}deg);font-size:22px">↑</span>
+          <span style="display:inline-block;transform:rotate(${wvDir + 180}deg);font-size:22px">↑</span>
         </div>
         <div>
           <div class="stat-row">
@@ -304,7 +304,7 @@ function renderWind(speedKts, gustKts, dir) {
   setHTML('wind-body', `
     <div class="wind-dir-display">
       <div class="wind-arrow-circle">
-        <span class="wind-arrow" style="transform:rotate(${dir}deg)">↑</span>
+        <span class="wind-arrow" style="transform:rotate(${dir + 180}deg)">↑</span>
       </div>
       <div class="wind-info">
         <div class="speed-row">
