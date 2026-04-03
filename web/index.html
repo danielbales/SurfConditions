@@ -18,12 +18,18 @@
 <header>
   <div class="header-left">
     <h1>🌊 Surf Conditions</h1>
-    <div class="subtitle">Monterey Bay · 36.6°N 121.9°W</div>
+    <div class="subtitle" id="location-subtitle">Carmel · 36.6°N 121.9°W</div>
   </div>
   <button class="refresh-btn" id="refreshBtn" onclick="refreshAll()">
     <span class="icon">↻</span> Refresh
   </button>
 </header>
+
+<div class="location-selector">
+  <button class="loc-btn active" data-id="carmel"   onclick="setLocation('carmel')">Carmel</button>
+  <button class="loc-btn"        data-id="asilomar" onclick="setLocation('asilomar')">Asilomar</button>
+  <button class="loc-btn"        data-id="bigsur"   onclick="setLocation('bigsur')">Big Sur</button>
+</div>
 
 <div class="last-updated" id="lastUpdated">Loading…</div>
 
