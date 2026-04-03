@@ -1,9 +1,9 @@
 // ─── Locations ────────────────────────────────────────────────────────────────
 const LOCATIONS = [
-  { id: 'steamerlane', name: 'Steamer Lane', lat: 36.9517, lng: -122.0245, tideStation: '9413745', marineZone: 'PZZ535' },
   { id: 'carmel',      name: 'Carmel',       lat: 36.5535, lng: -121.9255, tideStation: '9413450', marineZone: 'PZZ535' },
   { id: 'asilomar',    name: 'Asilomar',     lat: 36.6213, lng: -121.9427, tideStation: '9413450', marineZone: 'PZZ535' },
   { id: 'bigsur',      name: 'Big Sur',      lat: 36.2344, lng: -121.8173, tideStation: '9413450', marineZone: 'PZZ565' },
+  { id: 'steamerlane', name: 'Steamer Lane', lat: 36.9517, lng: -122.0245, tideStation: '9413745', marineZone: 'PZZ535' },
 ];
 
 const savedId = localStorage.getItem('surf_location') || 'carmel';
