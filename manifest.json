@@ -2,7 +2,8 @@
   "name": "Surf Conditions",
   "short_name": "Surf",
   "description": "Real-time surf conditions for Monterey Bay",
-  "start_url": "/",
+  "start_url": "/SurfConditions/",
+  "scope": "/SurfConditions/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0a1628",
@@ -25,7 +26,7 @@
   "shortcuts": [
     {
       "name": "Surf Report",
-      "url": "/",
+      "url": "/SurfConditions/",
       "description": "View current surf conditions"
     }
   ]
