@@ -1,10 +1,10 @@
 const CACHE_NAME = 'surf-conditions-v1';
 const APP_SHELL = [
-  '/',
-  '/index.html',
-  '/style.css',
-  '/app.js',
-  '/manifest.json'
+  '/SurfConditions/',
+  '/SurfConditions/index.html',
+  '/SurfConditions/style.css',
+  '/SurfConditions/app.js',
+  '/SurfConditions/manifest.json'
 ];
 
 self.addEventListener('install', event => {
