@@ -2,7 +2,7 @@
 const LAT = 36.6;
 const LNG = -121.9;
 const NOAA_STATION = '9413450';
-const BUOY_ID = '46042';
+const BUOY_ID = '46240';
 
 // ─── Service Worker ───────────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
@@ -91,11 +91,11 @@ function getMoonPhase(date = new Date()) {
   return { name, icon, phase, fraction, daysToFull: Math.round(daysToFull) };
 }
 
-// ─── 1. NOAA Buoy 46042 ───────────────────────────────────────────────────────
+// ─── 1. NOAA Buoy 46240 (Point Sur) ──────────────────────────────────────────
 async function loadBuoy() {
   try {
     // Use a CORS proxy to fetch NDBC text data
-    const url = `https://corsproxy.io/?https://www.ndbc.noaa.gov/data/realtime2/${BUOY_ID}.txt`;
+    const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://www.ndbc.noaa.gov/data/realtime2/${BUOY_ID}.txt`)}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
@@ -104,7 +104,7 @@ async function loadBuoy() {
     // Line 0 = header names, line 1 = units, line 2+ = data
     // Find first data line that isn't MM (missing)
     let data = null;
-    for (let i = 2; i < Math.min(i + 5, lines.length); i++) {
+    for (let i = 2; i < Math.min(10, lines.length); i++) {
       const cols = lines[i].trim().split(/\s+/);
       if (cols[8] !== 'MM') { data = cols; break; }
     }
@@ -119,15 +119,15 @@ async function loadBuoy() {
     const wtmp = parseFloat(data[14]);  // water temp °C
     const atmp = parseFloat(data[13]);  // air temp °C
 
-    const wvhtFt = metersToFeet(wvht).toFixed(1);
-    const wtmpF  = (wtmp * 9/5 + 32).toFixed(0);
-    const atmpF  = (atmp * 9/5 + 32).toFixed(0);
+    const wvhtFt = isNaN(wvht) ? 'N/A' : metersToFeet(wvht).toFixed(1);
+    const wtmpF  = isNaN(wtmp) ? 'N/A' : (wtmp * 9/5 + 32).toFixed(0);
+    const atmpF  = isNaN(atmp) ? 'N/A' : (atmp * 9/5 + 32).toFixed(0);
     const dirStr = isNaN(mwd) ? '—' : degToCompass(mwd);
 
     setHTML('buoy-body', `
       <div class="stat-row">
         <span class="stat-value" style="color:#00d4aa">${wvhtFt}</span>
-        <span class="stat-unit">ft</span>
+        ${wvhtFt !== 'N/A' ? '<span class="stat-unit">ft</span>' : ''}
       </div>
       <div class="stat-label">Significant Wave Height (measured)</div>
       <div class="stats-grid">
@@ -147,11 +147,11 @@ async function loadBuoy() {
         </div>
         <div class="stat-cell">
           <div class="label">Water Temp</div>
-          <div class="value">${isNaN(wtmp) ? '—' : wtmpF}<span style="font-size:12px;color:var(--text-muted)">°F</span></div>
+          <div class="value">${wtmpF}<span style="font-size:12px;color:var(--text-muted)">${wtmpF === 'N/A' ? '' : '°F'}</span></div>
           <div class="sub">${isNaN(wtmp) ? '' : wtmp.toFixed(1) + '°C'}</div>
         </div>
       </div>
-      <div class="buoy-source">46042 · Half Moon Bay · ~25nm offshore · ${isNaN(atmp) ? '' : 'Air ' + atmpF + '°F'}</div>
+      <div class="buoy-source">46240 · Point Sur · ~10nm offshore · ${atmpF === 'N/A' ? '' : 'Air ' + atmpF + '°F'}</div>
     `);
   } catch (e) {
     setHTML('buoy-body', errorHTML('Buoy data unavailable: ' + e.message));
