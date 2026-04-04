@@ -1,9 +1,9 @@
 // ─── Locations ────────────────────────────────────────────────────────────────
 const LOCATIONS = [
-  { id: 'carmel',      name: 'Carmel',       lat: 36.5535, lng: -121.9255, tideStation: '9413450', marineZone: 'PZZ535' },
-  { id: 'asilomar',    name: 'Asilomar',     lat: 36.6213, lng: -121.9427, tideStation: '9413450', marineZone: 'PZZ535' },
-  { id: 'bigsur',      name: 'Big Sur',      lat: 36.2344, lng: -121.8173, tideStation: '9413450', marineZone: 'PZZ565' },
-  { id: 'steamerlane', name: 'Steamer Lane', lat: 36.9517, lng: -122.0245, tideStation: '9413745', marineZone: 'PZZ535' },
+  { id: 'carmel',      name: 'Carmel',       lat: 36.5535, lng: -121.9255, tideStation: '9413450', marineZone: 'PZZ535', buoyId: '46240' },
+  { id: 'asilomar',    name: 'Asilomar',     lat: 36.6213, lng: -121.9427, tideStation: '9413450', marineZone: 'PZZ535', buoyId: '46240' },
+  { id: 'bigsur',      name: 'Big Sur',      lat: 36.2344, lng: -121.8173, tideStation: '9413450', marineZone: 'PZZ565', buoyId: '46236' },
+  { id: 'steamerlane', name: 'Steamer Lane', lat: 36.9517, lng: -122.0245, tideStation: '9413745', marineZone: 'PZZ535', buoyId: '46012' },
 ];
 
 const savedId = localStorage.getItem('surf_location') || 'carmel';
@@ -174,7 +174,7 @@ async function loadBuoy() {
           <div class="sub">${sstC !== null && sstC !== undefined ? sstC.toFixed(1) + '°C' : ''}</div>
         </div>
       </div>
-      <div class="buoy-source"><a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener" class="src-link">Open-Meteo Marine API ↗</a></div>
+      <div class="buoy-source"><a href="https://www.ndbc.noaa.gov/station_page.php?station=${ACTIVE.buoyId}" target="_blank" rel="noopener" class="src-link">NDBC Buoy ${ACTIVE.buoyId} · Nearest Offshore Station ↗</a></div>
     `);
   } catch (e) {
     setHTML('buoy-body', errorHTML('Wave data unavailable: ' + e.message));
@@ -250,7 +250,7 @@ async function loadSwell() {
       <div class="divider"></div>
       <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Next 6 Hours</div>
       ${forecastRows}
-      <div class="buoy-source" style="margin-top:6px"><a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener" class="src-link">Open-Meteo Marine API ↗</a></div>
+      <div class="buoy-source" style="margin-top:6px"><a href="https://www.ndbc.noaa.gov/station_page.php?station=${ACTIVE.buoyId}" target="_blank" rel="noopener" class="src-link">NDBC Buoy ${ACTIVE.buoyId} · Nearest Offshore Station ↗</a></div>
     `);
   } catch (e) {
     setHTML('swell-body', errorHTML('Swell data unavailable: ' + e.message));
@@ -325,7 +325,7 @@ function renderWind(speedKts, gustKts, dir) {
         <div class="sub">${dir}°</div>
       </div>
     </div>
-    <div class="buoy-source" style="margin-top:6px"><a href="https://open-meteo.com/en/docs" target="_blank" rel="noopener" class="src-link">Open-Meteo Forecast API ↗</a></div>
+    <div class="buoy-source" style="margin-top:6px"><a href="https://forecast.weather.gov/MapClick.php?lat=${LAT()}&lon=${LNG()}" target="_blank" rel="noopener" class="src-link">NWS Point Forecast ↗</a></div>
   `);
 }
 
@@ -490,7 +490,7 @@ async function loadTides() {
       ${svg}
       <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin:10px 0 5px">Today's Schedule</div>
       <div class="tide-schedule">${scheduleHTML || '<div class="error-msg">No events today</div>'}</div>
-      <div class="buoy-source" style="margin-top:6px"><a href="https://tidesandcurrents.noaa.gov/stationhome.html?id=${NOAA_STATION()}" target="_blank" rel="noopener" class="src-link">NOAA Station ${NOAA_STATION()} · MLLW ↗</a></div>
+      <div class="buoy-source" style="margin-top:6px"><a href="https://tidesandcurrents.noaa.gov/waterlevels.html?id=${NOAA_STATION()}" target="_blank" rel="noopener" class="src-link">NOAA Tides & Currents · Station ${NOAA_STATION()} ↗</a></div>
     `);
   } catch (e) {
     setHTML('tides-body', errorHTML('Tide data unavailable: ' + e.message));
@@ -575,7 +575,7 @@ async function loadMarineForecast() {
     }).join('');
 
     setHTML('marine-body', (html || errorHTML('No forecast periods available'))
-      + `<div class="buoy-source" style="margin-top:8px"><a href="https://www.weather.gov/mtr/marine" target="_blank" rel="noopener" class="src-link">NWS San Francisco · Coastal Waters Forecast ↗</a></div>`);
+      + `<div class="buoy-source" style="margin-top:8px"><a href="https://www.weather.gov/mtr/CWF" target="_blank" rel="noopener" class="src-link">NWS Coastal Waters Forecast · ${MARINE_ZONE()} ↗</a></div>`);
   } catch (e) {
     setHTML('marine-body', errorHTML('Marine forecast unavailable: ' + e.message));
   }
@@ -629,7 +629,7 @@ async function loadRipCurrent(ptData) {
         <div class="rip-level ${ripLevel}">${levelLabel}</div>
         <div class="rip-desc">${ripText.substring(0, 200)}${ripText.length > 200 ? '…' : ''}</div>
       </div>
-      <div class="buoy-source" style="margin-top:8px"><a href="https://www.weather.gov/mtr/" target="_blank" rel="noopener" class="src-link">NWS San Francisco Bay Area ↗</a></div>
+      <div class="buoy-source" style="margin-top:8px"><a href="https://www.weather.gov/mtr/rip" target="_blank" rel="noopener" class="src-link">NWS Rip Current Outlook ↗</a></div>
     `);
   } catch (e) {
     setHTML('rip-body', errorHTML('Rip current data unavailable: ' + e.message));
