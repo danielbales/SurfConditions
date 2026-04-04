@@ -107,6 +107,14 @@ header {
 }
 .loc-btn:active { opacity: 0.75; }
 
+/* Source links */
+.src-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 10px;
+}
+.src-link:hover { color: var(--accent-blue); text-decoration: underline; }
+
 /* Last updated */
 .last-updated {
   text-align: center;
