@@ -256,11 +256,11 @@ async function loadSwell() {
   }
 }
 
-// ─── 3. Open-Meteo Weather (Wind + UV) ────────────────────────────────────────
+// ─── 3. Open-Meteo Weather (Wind) ─────────────────────────────────────────────
 async function loadWeather() {
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT()}&longitude=${LNG()}`
-      + `&hourly=wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index`
+      + `&hourly=wind_speed_10m,wind_gusts_10m,wind_direction_10m`
       + `&wind_speed_unit=kn&timezone=America%2FLos_Angeles&forecast_days=1`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -273,16 +273,9 @@ async function loadWeather() {
       if (new Date(hours[i]) <= now) idx = i;
     }
 
-    const windSpd  = d.hourly.wind_speed_10m[idx];
-    const windGust = d.hourly.wind_gusts_10m[idx];
-    const windDir  = d.hourly.wind_direction_10m[idx];
-    const uv       = d.hourly.uv_index[idx] ?? 0;
-
-    renderWind(windSpd, windGust, windDir);
-    renderUV(uv);
+    renderWind(d.hourly.wind_speed_10m[idx], d.hourly.wind_gusts_10m[idx], d.hourly.wind_direction_10m[idx]);
   } catch (e) {
     setHTML('wind-body', errorHTML('Wind data unavailable: ' + e.message));
-    setHTML('uv-body', errorHTML('UV data unavailable'));
   }
 }
 
@@ -334,26 +327,6 @@ function renderWind(speedKts, gustKts, dir) {
   `);
 }
 
-function renderUV(uv) {
-  const cat = uvCategory(uv);
-  const pct = Math.min(uv / 11, 1) * 100;
-  setBadge('uv-badge', cat.label.toUpperCase(), cat.color, cat.bg);
-  setHTML('uv-body', `
-    <div class="stat-row">
-      <span class="stat-value" style="color:${cat.color}">${uv?.toFixed(1) ?? '—'}</span>
-    </div>
-    <div class="stat-label">${cat.label} · UV Index</div>
-    <div class="uv-bar-wrap">
-      <div class="uv-bar-track">
-        <div class="uv-bar-dot" style="left:${pct}%"></div>
-      </div>
-      <div class="uv-labels"><span>0</span><span>3</span><span>6</span><span>8</span><span>11+</span></div>
-    </div>
-    <div style="font-size:11px;color:var(--text-muted);margin-top:6px">
-      ${uv < 3 ? 'No protection needed' : uv < 6 ? 'Sunscreen recommended' : uv < 8 ? 'Sunscreen & hat required' : 'Extra protection essential'}
-    </div>
-  `);
-}
 
 // ─── 4. NOAA Tides ────────────────────────────────────────────────────────────
 async function loadTides() {
@@ -522,78 +495,6 @@ async function loadTides() {
   }
 }
 
-// ─── 5. Sunrise / Sunset ──────────────────────────────────────────────────────
-async function loadSunMoon() {
-  try {
-    const url = `https://api.sunrise-sunset.org/json?lat=${LAT()}&lng=${LNG()}&formatted=0`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const d = await res.json();
-
-    const sunrise = new Date(d.results.sunrise);
-    const sunset  = new Date(d.results.sunset);
-    const solar   = new Date(d.results.solar_noon);
-    const daylen  = d.results.day_length; // seconds
-
-    const hours = Math.floor(daylen / 3600);
-    const mins  = Math.floor((daylen % 3600) / 60);
-
-    const moon = getMoonPhase();
-
-    setHTML('sunmoon-body', `
-      <div class="sun-moon-grid">
-        <div class="sun-section">
-          <div class="section-label">☀️ Sun</div>
-          <div class="sun-times">
-            <div class="time-row">
-              <span class="lbl">Sunrise</span>
-              <span class="val">${fmtTime(sunrise)}</span>
-            </div>
-            <div class="time-row">
-              <span class="lbl">Solar Noon</span>
-              <span class="val">${fmtTime(solar)}</span>
-            </div>
-            <div class="time-row">
-              <span class="lbl">Sunset</span>
-              <span class="val">${fmtTime(sunset)}</span>
-            </div>
-            <div class="time-row" style="margin-top:4px">
-              <span class="lbl">Day length</span>
-              <span class="val" style="font-size:11px">${hours}h ${mins}m</span>
-            </div>
-          </div>
-        </div>
-        <div class="moon-section">
-          <div class="section-label">🌙 Moon</div>
-          <div class="moon-info">
-            <div class="moon-phase-icon">${moon.icon}</div>
-            <div class="moon-phase-name">${moon.name}</div>
-            <div style="font-size:10px;color:var(--text-muted);text-align:center;margin-top:4px">
-              ${moon.daysToFull > 0 ? moon.daysToFull + 'd to full' : 'Full moon today'}
-            </div>
-          </div>
-        </div>
-      </div>
-    `);
-  } catch (e) {
-    // Fall back to moon-only if sunrise API fails
-    const moon = getMoonPhase();
-    setHTML('sunmoon-body', `
-      <div class="sun-moon-grid">
-        <div class="sun-section">
-          <div class="error-msg">Sun times unavailable</div>
-        </div>
-        <div class="moon-section">
-          <div class="section-label">🌙 Moon</div>
-          <div class="moon-info">
-            <div class="moon-phase-icon">${moon.icon}</div>
-            <div class="moon-phase-name">${moon.name}</div>
-          </div>
-        </div>
-      </div>
-    `);
-  }
-}
 
 // ─── 6 & 7. NWS Marine Forecast + Rip Current ────────────────────────────────
 async function loadNWS() {
@@ -743,7 +644,6 @@ async function refreshAll() {
     loadSwell(),
     loadWeather(),
     loadTides(),
-    loadSunMoon(),
     loadNWS(),
   ]);
 
