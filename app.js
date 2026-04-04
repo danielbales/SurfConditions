@@ -174,7 +174,7 @@ async function loadBuoy() {
           <div class="sub">${sstC !== null && sstC !== undefined ? sstC.toFixed(1) + '°C' : ''}</div>
         </div>
       </div>
-      <div class="buoy-source">Open-Meteo Marine · Monterey Bay · model data</div>
+      <div class="buoy-source"><a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener" class="src-link">Open-Meteo Marine API ↗</a></div>
     `);
   } catch (e) {
     setHTML('buoy-body', errorHTML('Wave data unavailable: ' + e.message));
@@ -250,6 +250,7 @@ async function loadSwell() {
       <div class="divider"></div>
       <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Next 6 Hours</div>
       ${forecastRows}
+      <div class="buoy-source" style="margin-top:6px"><a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener" class="src-link">Open-Meteo Marine API ↗</a></div>
     `);
   } catch (e) {
     setHTML('swell-body', errorHTML('Swell data unavailable: ' + e.message));
@@ -324,6 +325,7 @@ function renderWind(speedKts, gustKts, dir) {
         <div class="sub">${dir}°</div>
       </div>
     </div>
+    <div class="buoy-source" style="margin-top:6px"><a href="https://open-meteo.com/en/docs" target="_blank" rel="noopener" class="src-link">Open-Meteo Forecast API ↗</a></div>
   `);
 }
 
@@ -488,7 +490,7 @@ async function loadTides() {
       ${svg}
       <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin:10px 0 5px">Today's Schedule</div>
       <div class="tide-schedule">${scheduleHTML || '<div class="error-msg">No events today</div>'}</div>
-      <div class="buoy-source" style="margin-top:6px">NOAA Station ${NOAA_STATION()} · MLLW</div>
+      <div class="buoy-source" style="margin-top:6px"><a href="https://tidesandcurrents.noaa.gov/stationhome.html?id=${NOAA_STATION()}" target="_blank" rel="noopener" class="src-link">NOAA Station ${NOAA_STATION()} · MLLW ↗</a></div>
     `);
   } catch (e) {
     setHTML('tides-body', errorHTML('Tide data unavailable: ' + e.message));
@@ -572,7 +574,8 @@ async function loadMarineForecast() {
         </div>`;
     }).join('');
 
-    setHTML('marine-body', html || errorHTML('No forecast periods available'));
+    setHTML('marine-body', (html || errorHTML('No forecast periods available'))
+      + `<div class="buoy-source" style="margin-top:8px"><a href="https://www.weather.gov/mtr/marine" target="_blank" rel="noopener" class="src-link">NWS San Francisco · Coastal Waters Forecast ↗</a></div>`);
   } catch (e) {
     setHTML('marine-body', errorHTML('Marine forecast unavailable: ' + e.message));
   }
@@ -626,7 +629,7 @@ async function loadRipCurrent(ptData) {
         <div class="rip-level ${ripLevel}">${levelLabel}</div>
         <div class="rip-desc">${ripText.substring(0, 200)}${ripText.length > 200 ? '…' : ''}</div>
       </div>
-      <div class="buoy-source" style="margin-top:8px">Source: NWS · National Weather Service</div>
+      <div class="buoy-source" style="margin-top:8px"><a href="https://www.weather.gov/mtr/" target="_blank" rel="noopener" class="src-link">NWS San Francisco Bay Area ↗</a></div>
     `);
   } catch (e) {
     setHTML('rip-body', errorHTML('Rip current data unavailable: ' + e.message));
