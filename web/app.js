@@ -349,9 +349,13 @@ async function loadTides() {
     if (!hourlyRes.ok || !hiloRes.ok) throw new Error('HTTP error');
     const [hourlyData, hiloData] = await Promise.all([hourlyRes.json(), hiloRes.json()]);
     if (hourlyData.error) throw new Error(hourlyData.error.message);
+    if (hiloData.error) throw new Error(hiloData.error.message);
 
-    const hourly = hourlyData.predictions.map(p => ({ t: new Date(p.t), v: parseFloat(p.v) }));
-    const events = hiloData.predictions.map(p => ({ t: new Date(p.t), v: parseFloat(p.v), type: p.type }));
+    // NOAA returns "YYYY-MM-DD HH:MM" (space, not T) — replace space with T for reliable parsing
+    const parseNoaaDate = s => new Date(s.replace(' ', 'T'));
+
+    const hourly = hourlyData.predictions.map(p => ({ t: parseNoaaDate(p.t), v: parseFloat(p.v) }));
+    const events = hiloData.predictions.map(p => ({ t: parseNoaaDate(p.t), v: parseFloat(p.v), type: p.type }));
     const now = new Date();
 
     // ── SVG line chart ──────────────────────────────────────────────────────
