@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0a1628">
-  <meta name="description" content="Real-time surf conditions for Monterey Bay">
+  <meta name="description" content="Real-time surf conditions for your local spots">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -18,25 +18,23 @@
 <header>
   <div class="header-left">
     <h1>🌊 DB's Local</h1>
-    <div class="subtitle" id="location-subtitle">Carmel · 36.6°N 121.9°W</div>
+    <div class="subtitle" id="location-subtitle"></div>
   </div>
-  <button class="refresh-btn" id="refreshBtn" onclick="refreshAll()">
-    <span class="icon">↻</span> Refresh
-  </button>
+  <div class="header-right">
+    <button class="edit-btn" id="editBtn" onclick="openSpotEditor(true)">✎ Spots</button>
+    <button class="refresh-btn" id="refreshBtn" onclick="refreshAll()">
+      <span class="icon">↻</span> Refresh
+    </button>
+  </div>
 </header>
 
-<div class="location-selector">
-  <button class="loc-btn active" data-id="carmel"      onclick="setLocation('carmel')">Carmel</button>
-  <button class="loc-btn"        data-id="asilomar"    onclick="setLocation('asilomar')">Asilomar</button>
-  <button class="loc-btn"        data-id="bigsur"      onclick="setLocation('bigsur')">Big Sur</button>
-  <button class="loc-btn"        data-id="steamerlane" onclick="setLocation('steamerlane')">Steamer Lane</button>
-</div>
+<div class="location-selector" id="location-selector"></div>
 
 <div class="last-updated" id="lastUpdated">Loading…</div>
 
 <main>
 
-  <!-- NOAA Buoy (measured) -->
+  <!-- Wave Observations (Open-Meteo Marine current) -->
   <div class="card" id="card-buoy">
     <div class="card-header">
       <div class="card-title"><span class="icon">📡</span> Wave Observations</div>
@@ -47,7 +45,7 @@
     </div>
   </div>
 
-  <!-- Swell (Open-Meteo Marine) -->
+  <!-- Swell Forecast -->
   <div class="card" id="card-swell">
     <div class="card-header">
       <div class="card-title"><span class="icon">🌊</span> Swell Forecast</div>
@@ -69,10 +67,21 @@
     </div>
   </div>
 
-  <!-- Tides -->
-  <div class="card" id="card-tides">
+  <!-- Wind Forecast -->
+  <div class="card" id="card-wind-forecast">
     <div class="card-header">
-      <div class="card-title"><span class="icon">🌊</span> Tides · Station 9413450</div>
+      <div class="card-title"><span class="icon">📈</span> Wind Forecast</div>
+      <div class="card-badge" style="background:rgba(0,200,83,0.15);color:#00c853">48H</div>
+    </div>
+    <div class="card-body" id="wind-forecast-body">
+      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+    </div>
+  </div>
+
+  <!-- Tides (US only — hidden until US spot loaded) -->
+  <div class="card" id="card-tides" style="display:none">
+    <div class="card-header">
+      <div class="card-title"><span class="icon">🌊</span> Tides</div>
       <div class="card-badge" style="background:rgba(155,109,255,0.15);color:#9b6dff">NOAA</div>
     </div>
     <div class="card-body" id="tides-body">
@@ -80,9 +89,8 @@
     </div>
   </div>
 
-
-  <!-- Marine Forecast (NWS) -->
-  <div class="card" id="card-marine">
+  <!-- Marine Forecast (US only) -->
+  <div class="card" id="card-marine" style="display:none">
     <div class="card-header">
       <div class="card-title"><span class="icon">⚓</span> Marine Forecast</div>
       <div class="card-badge" style="background:rgba(30,144,255,0.15);color:#1e90ff">NWS</div>
@@ -92,8 +100,8 @@
     </div>
   </div>
 
-  <!-- Rip Current -->
-  <div class="card" id="card-rip">
+  <!-- Rip Current (US only) -->
+  <div class="card" id="card-rip" style="display:none">
     <div class="card-header">
       <div class="card-title"><span class="icon">⚠️</span> Rip Current Risk</div>
       <div class="card-badge" id="rip-badge" style="background:rgba(0,200,83,0.15);color:#00c853">LOW</div>
@@ -104,6 +112,34 @@
   </div>
 
 </main>
+
+<!-- Onboarding / Spot Editor Overlay -->
+<div id="onboarding" class="onboarding-overlay">
+  <div class="onboarding-inner">
+    <div class="onboarding-logo">🌊</div>
+    <div class="onboarding-title" id="onboarding-title">DB's Local</div>
+    <div class="onboarding-sub" id="onboarding-sub">Add up to 4 of your local surf spots</div>
+
+    <div class="search-wrap">
+      <input type="search" id="spot-search" class="spot-search-input"
+             placeholder="Search a beach or location…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             oninput="onSearchInput(this.value)">
+    </div>
+
+    <div id="search-status" class="search-status"></div>
+    <div id="search-results" class="search-results"></div>
+
+    <div id="added-spots-section" style="display:none">
+      <div class="added-label">Your Spots</div>
+      <div id="added-spots-list" class="added-spots-list"></div>
+    </div>
+
+    <button class="onboarding-btn" id="start-btn" onclick="finishOnboarding()" disabled>
+      Start Surfing →
+    </button>
+  </div>
+</div>
 
 <script src="app.js"></script>
 </body>
