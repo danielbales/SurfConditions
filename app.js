@@ -76,11 +76,18 @@ let SAVED_SPOTS = [];
 let ACTIVE = null;
 let pendingSpots = []; // working copy while editor is open
 
+const DEFAULT_SPOTS = [
+  { id: 'carmel',   name: 'Carmel Beach',  lat: 36.5535, lng: -121.9255, isUS: true, tideStation: '9413450', marineZone: 'PZZ535', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/91,48/forecast' },
+  { id: 'asilomar', name: 'Asilomar',       lat: 36.6213, lng: -121.9427, isUS: true, tideStation: '9413450', marineZone: 'PZZ535', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/91,51/forecast' },
+  { id: 'bigsur',   name: 'Big Sur',        lat: 36.2344, lng: -121.8173, isUS: true, tideStation: '9413450', marineZone: 'PZZ565', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/92,33/forecast' },
+  { id: 'steamer',  name: 'Steamer Lane',   lat: 36.9516, lng: -122.0255, isUS: true, tideStation: '9413450', marineZone: 'PZZ535', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/91,66/forecast' },
+];
+
 function loadSpots() {
   try {
     const raw = localStorage.getItem('surf_spots_v2');
-    SAVED_SPOTS = raw ? JSON.parse(raw) : [];
-  } catch(e) { SAVED_SPOTS = []; }
+    SAVED_SPOTS = raw ? JSON.parse(raw) : DEFAULT_SPOTS;
+  } catch(e) { SAVED_SPOTS = DEFAULT_SPOTS; }
 }
 
 function saveSpots() {
