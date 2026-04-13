@@ -6,7 +6,7 @@ const VAPID_PUBLIC_KEY = 'BFBSS-y5LgAuMfFCW2Vht2wYdxJBSNvQ-O9pHy98Ink35jeBCfxsaj
 let _swReg = null;
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js')
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
     .then(reg => {
       _swReg = reg;
       if ('PushManager' in window) {
