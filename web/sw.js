@@ -1,4 +1,5 @@
-const CACHE_NAME = 'surf-conditions-v4';
+const CACHE_NAME = 'surf-conditions-v5';
+const WORKER_URL = 'https://surf-alerts.dbales1210.workers.dev';
 const APP_SHELL = [
   '/SurfConditions/',
   '/SurfConditions/index.html',
@@ -47,4 +48,38 @@ self.addEventListener('fetch', event => {
         }))
     );
   }
+});
+
+// ─── Push Notifications ───────────────────────────────────────────────────────
+self.addEventListener('push', event => {
+  event.waitUntil(
+    fetch(`${WORKER_URL}/alert`)
+      .then(r => r.json())
+      .then(({ title, body }) =>
+        self.registration.showNotification(title, {
+          body,
+          icon: '/SurfConditions/icons/icon-192.svg',
+          badge: '/SurfConditions/icons/icon-192.svg',
+          tag: 'surf-alert',
+          renotify: true,
+          vibrate: [200, 100, 200],
+        })
+      )
+      .catch(() =>
+        self.registration.showNotification('🌊 Surf Alert', {
+          body: 'Good conditions detected — check DB\'s Local',
+          tag: 'surf-alert',
+        })
+      )
+  );
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
+      const match = cs.find(c => c.url.includes('/SurfConditions'));
+      return match ? match.focus() : clients.openWindow('/SurfConditions/');
+    })
+  );
 });

@@ -1,6 +1,72 @@
-// ─── Service Worker ───────────────────────────────────────────────────────────
+// ─── Config ───────────────────────────────────────────────────────────────────
+const WORKER_URL = 'https://surf-alerts.dbales1210.workers.dev';
+const VAPID_PUBLIC_KEY = 'BFBSS-y5LgAuMfFCW2Vht2wYdxJBSNvQ-O9pHy98Ink35jeBCfxsaj0CF0xXcr8eXG3OFHYgFUP3IX-bsFh_1Oc';
+
+// ─── Service Worker + Push Notifications ──────────────────────────────────────
+let _swReg = null;
+
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  navigator.serviceWorker.register('sw.js')
+    .then(reg => {
+      _swReg = reg;
+      if ('PushManager' in window) {
+        document.getElementById('alertBtn').style.display = '';
+        updateAlertBtn(reg);
+      }
+    })
+    .catch(() => {});
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const pad = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + pad).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  return Uint8Array.from(raw, c => c.charCodeAt(0));
+}
+
+async function updateAlertBtn(reg) {
+  const btn = document.getElementById('alertBtn');
+  if (!btn) return;
+  const sub = await reg.pushManager.getSubscription();
+  btn.textContent = sub ? '🔔' : '🔕';
+  btn.title = sub ? 'Alerts ON — tap to disable' : 'Alerts OFF — tap to enable';
+}
+
+async function toggleAlerts() {
+  if (!_swReg) return;
+  const existing = await _swReg.pushManager.getSubscription();
+
+  if (existing) {
+    await existing.unsubscribe();
+    await fetch(`${WORKER_URL}/unsubscribe`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: existing.endpoint }),
+    }).catch(() => {});
+    updateAlertBtn(_swReg);
+    return;
+  }
+
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') {
+    alert('Notification permission denied. Enable it in Chrome settings.');
+    return;
+  }
+
+  try {
+    const sub = await _swReg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    });
+    await fetch(`${WORKER_URL}/subscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription: sub }),
+    });
+    updateAlertBtn(_swReg);
+  } catch (e) {
+    alert('Failed to enable alerts: ' + e.message);
+  }
 }
 
 // ─── Spot Storage ─────────────────────────────────────────────────────────────

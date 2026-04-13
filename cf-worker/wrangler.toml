@@ -1,0 +1,7 @@
+name = "surf-alerts"
+main = "src/worker.js"
+compatibility_date = "2024-09-23"
+
+[[kv_namespaces]]
+binding = "SURF_SUBS"
+id = "ba42ce11a83741c6ae7fd85b4de74225"
