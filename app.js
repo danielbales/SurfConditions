@@ -520,6 +520,169 @@ async function loadBuoy() {
   }
 }
 
+// ─── Swell chart canvas helpers ───────────────────────────────────────────────
+function drawSwellChart(canvas, pts, hlIdx) {
+  const DPR = window.devicePixelRatio || 1;
+  const W   = canvas.clientWidth || 320;
+  const H   = 110;
+  canvas.width  = W * DPR;
+  canvas.height = H * DPR;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(DPR, DPR);
+
+  const PL = 32, PR = 6, PT = 10, PB = 18;
+  const cW = W - PL - PR, cH = H - PT - PB;
+
+  const maxV  = Math.max(...pts.map(p => p.wvHt), 1);
+  const tStart = pts[0].t.getTime();
+  const tEnd   = pts[pts.length - 1].t.getTime();
+  const tRange = tEnd - tStart;
+  const tx = t => PL + ((t.getTime() - tStart) / tRange) * cW;
+  const ty = v => PT + (1 - v / maxV) * cH;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid + Y labels
+  const yStep = maxV <= 4 ? 1 : maxV <= 8 ? 2 : 3;
+  ctx.font = '8px monospace';
+  for (let v = 0; v <= maxV; v += yStep) {
+    const y = ty(v);
+    ctx.strokeStyle = '#1a2e45'; ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(PL, y); ctx.lineTo(W - PR, y); ctx.stroke();
+    ctx.fillStyle = '#607d8b';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(v), PL - 3, y);
+  }
+
+  // X labels
+  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  for (const p of pts) {
+    if (p.t.getHours() % 6 === 0) {
+      const x = tx(p.t);
+      const label = p.t.getHours() === 0
+        ? p.t.toLocaleDateString([], { weekday: 'short' })
+        : p.t.getHours() + 'h';
+      ctx.strokeStyle = '#1a2e45'; ctx.lineWidth = 0.5;
+      ctx.beginPath(); ctx.moveTo(x, PT); ctx.lineTo(x, PT + cH); ctx.stroke();
+      ctx.fillStyle = '#607d8b';
+      ctx.fillText(label, x, H - 3);
+    }
+  }
+
+  // Wave height filled area
+  ctx.beginPath();
+  ctx.moveTo(tx(pts[0].t), ty(0));
+  for (const p of pts) ctx.lineTo(tx(p.t), ty(p.wvHt));
+  ctx.lineTo(tx(pts[pts.length - 1].t), ty(0));
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(30,144,255,0.15)';
+  ctx.fill();
+
+  // Wave height line
+  ctx.beginPath();
+  ctx.moveTo(tx(pts[0].t), ty(pts[0].wvHt));
+  for (const p of pts) ctx.lineTo(tx(p.t), ty(p.wvHt));
+  ctx.strokeStyle = '#1e90ff'; ctx.lineWidth = 1.5; ctx.lineJoin = 'round';
+  ctx.setLineDash([]); ctx.stroke();
+
+  // Swell height line (dashed)
+  ctx.beginPath();
+  ctx.moveTo(tx(pts[0].t), ty(pts[0].swHt));
+  for (const p of pts) ctx.lineTo(tx(p.t), ty(p.swHt));
+  ctx.strokeStyle = '#00d4aa'; ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 2]); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // NOW marker
+  const nowX = Math.max(PL, Math.min(W - PR, tx(pts[0].t)));
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath(); ctx.moveTo(nowX, PT); ctx.lineTo(nowX, PT + cH); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.font = '7px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText('NOW', nowX, PT - 1);
+
+  // Highlight crosshair
+  if (hlIdx !== null && hlIdx >= 0 && hlIdx < pts.length) {
+    const p  = pts[hlIdx];
+    const hx = tx(p.t);
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(hx, PT); ctx.lineTo(hx, PT + cH); ctx.stroke();
+
+    // Dot on wave line
+    ctx.beginPath(); ctx.arc(hx, ty(p.wvHt), 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#1e90ff'; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+
+    // Dot on swell line
+    ctx.beginPath(); ctx.arc(hx, ty(p.swHt), 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#00d4aa'; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
+  }
+}
+
+function setupSwellChart(pts) {
+  const canvas = document.getElementById('swell-chart-canvas');
+  const tip    = document.getElementById('swell-chart-tip');
+  if (!canvas || !tip) return;
+
+  const PL = 32, PR = 6;
+  const tStart = pts[0].t.getTime();
+  const tEnd   = pts[pts.length - 1].t.getTime();
+  const tRange = tEnd - tStart;
+
+  function idxFromClientX(clientX) {
+    const rect = canvas.getBoundingClientRect();
+    const cW   = rect.width - PL - PR;
+    const frac = Math.max(0, Math.min(1, (clientX - rect.left - PL) / cW));
+    const tgt  = tStart + frac * tRange;
+    let best = 0, bestD = Infinity;
+    for (let i = 0; i < pts.length; i++) {
+      const d = Math.abs(pts[i].t.getTime() - tgt);
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    return best;
+  }
+
+  function showTip(clientX) {
+    const i = idxFromClientX(clientX);
+    const p = pts[i];
+    drawSwellChart(canvas, pts, i);
+
+    const rect  = canvas.getBoundingClientRect();
+    const cW    = rect.width - PL - PR;
+    const dotX  = PL + ((p.t.getTime() - tStart) / tRange) * cW;
+    const tipW  = tip.offsetWidth || 140;
+    tip.style.left = (dotX > cW / 2 ? Math.max(0, dotX - tipW - 8) : dotX + 10) + 'px';
+
+    tip.innerHTML = `
+      <div style="font-size:10px;color:#00d4aa;font-family:monospace;margin-bottom:3px">
+        ${fmtTime(p.t)} ${p.t.toLocaleDateString([], { weekday: 'short' })}
+      </div>
+      <div style="font-size:12px;color:#1e90ff;font-family:monospace">
+        Wave <b>${p.wvHt.toFixed(1)} ft</b> · ${p.per.toFixed(0)}s
+      </div>
+      <div style="font-size:11px;color:#00d4aa;font-family:monospace">
+        Swell <b>${p.swHt.toFixed(1)} ft</b> · ${degToCompass(p.swDir)}
+      </div>`;
+    tip.style.display = 'block';
+  }
+
+  function hideTip() {
+    tip.style.display = 'none';
+    drawSwellChart(canvas, pts, null);
+  }
+
+  drawSwellChart(canvas, pts, null);
+
+  canvas.addEventListener('touchstart', e => { e.preventDefault(); showTip(e.touches[0].clientX); }, { passive: false });
+  canvas.addEventListener('touchmove',  e => { e.preventDefault(); showTip(e.touches[0].clientX); }, { passive: false });
+  canvas.addEventListener('touchend',   hideTip);
+  canvas.addEventListener('mousemove',  e => showTip(e.clientX));
+  canvas.addEventListener('mouseleave', hideTip);
+}
+
 // ─── 2. Open-Meteo Marine (Swell Forecast) ────────────────────────────────────
 async function loadSwell() {
   try {
@@ -560,65 +723,6 @@ async function loadSwell() {
       });
     }
 
-    // ── SVG line graph ──────────────────────────────────────────────────────
-    const W = 320, H = 110, PL = 32, PR = 6, PT = 8, PB = 18;
-    const cW = W - PL - PR, cH = H - PT - PB;
-
-    const maxV = Math.max(...pts.map(p => p.wvHt), 1);
-    const tStart = pts[0].t.getTime();
-    const tEnd   = pts[pts.length - 1].t.getTime();
-    const tRange = tEnd - tStart;
-
-    const tx = t => PL + ((t.getTime() - tStart) / tRange) * cW;
-    const ty = v => PT + (1 - v / maxV) * cH;
-
-    // Wave height filled area + line
-    const wvPts  = pts.map(p => `${tx(p.t).toFixed(1)},${ty(p.wvHt).toFixed(1)}`).join(' ');
-    const wvArea = `M${tx(pts[0].t).toFixed(1)},${ty(0).toFixed(1)} `
-      + pts.map(p => `L${tx(p.t).toFixed(1)},${ty(p.wvHt).toFixed(1)}`).join(' ')
-      + ` L${tx(pts[pts.length-1].t).toFixed(1)},${ty(0).toFixed(1)} Z`;
-
-    // Swell height line
-    const swPts = pts.map(p => `${tx(p.t).toFixed(1)},${ty(p.swHt).toFixed(1)}`).join(' ');
-
-    // Y-axis labels
-    const yStep = maxV <= 4 ? 1 : maxV <= 8 ? 2 : 3;
-    let yLabels = '';
-    for (let v = 0; v <= maxV; v += yStep) {
-      yLabels += `<text x="${PL - 3}" y="${ty(v).toFixed(1)}" text-anchor="end" dominant-baseline="middle" fill="#607d8b" font-size="8" font-family="monospace">${v}</text>`;
-      yLabels += `<line x1="${PL}" y1="${ty(v).toFixed(1)}" x2="${W - PR}" y2="${ty(v).toFixed(1)}" stroke="#1a2e45" stroke-width="0.5"/>`;
-    }
-
-    // X-axis: ticks every 6 hours
-    let xLabels = '';
-    for (const p of pts) {
-      if (p.t.getHours() % 6 === 0) {
-        const x = tx(p.t).toFixed(1);
-        const label = p.t.getHours() === 0
-          ? p.t.toLocaleDateString([], { weekday: 'short' })
-          : p.t.getHours() + 'h';
-        xLabels += `<line x1="${x}" y1="${PT}" x2="${x}" y2="${PT + cH}" stroke="#1a2e45" stroke-width="0.5"/>`;
-        xLabels += `<text x="${x}" y="${H - 3}" text-anchor="middle" fill="#607d8b" font-size="8" font-family="monospace">${label}</text>`;
-      }
-    }
-
-    // "Now" marker
-    const nowX = Math.max(PL, Math.min(W - PR, tx(pts[0].t))).toFixed(1);
-    const nowLine = `<line x1="${nowX}" y1="${PT}" x2="${nowX}" y2="${PT + cH}" stroke="rgba(255,255,255,0.2)" stroke-width="1" stroke-dasharray="3,3"/>
-      <text x="${nowX}" y="${PT - 1}" text-anchor="middle" fill="rgba(255,255,255,0.3)" font-size="7" font-family="monospace">NOW</text>`;
-
-    const svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;margin-bottom:10px">
-      ${yLabels}${xLabels}${nowLine}
-      <path d="${wvArea}" fill="rgba(30,144,255,0.15)"/>
-      <polyline points="${wvPts}" fill="none" stroke="#1e90ff" stroke-width="1.5" stroke-linejoin="round"/>
-      <polyline points="${swPts}" fill="none" stroke="#00d4aa" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="4,2"/>
-    </svg>`;
-
-    const legend = `<div style="display:flex;gap:14px;margin-bottom:8px;font-size:10px;color:var(--text-muted);font-family:monospace">
-      <span><span style="display:inline-block;width:16px;height:2px;background:#1e90ff;vertical-align:middle;margin-right:4px"></span>Wave Ht (ft)</span>
-      <span><span style="display:inline-block;width:16px;height:1px;background:#00d4aa;vertical-align:middle;margin-right:4px;border-top:1.5px dashed #00d4aa"></span>Swell Ht (ft)</span>
-    </div>`;
-
     // Direction table — every 3 hours, next 24 hours
     const dirSamples = [];
     for (let i = 0; i < pts.length && dirSamples.length < 8; i++) {
@@ -639,6 +743,11 @@ async function loadSwell() {
     const srcLink = ACTIVE.buoyId
       ? `<a href="https://www.ndbc.noaa.gov/station_page.php?station=${ACTIVE.buoyId}" target="_blank" rel="noopener" class="src-link">NDBC Buoy ${ACTIVE.buoyId} ↗</a>`
       : `<a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener" class="src-link">Open-Meteo Marine API ↗</a>`;
+
+    const legend = `<div style="display:flex;gap:14px;margin-bottom:6px;font-size:10px;color:var(--text-muted);font-family:monospace">
+      <span><span style="display:inline-block;width:16px;height:2px;background:#1e90ff;vertical-align:middle;margin-right:4px"></span>Wave (ft)</span>
+      <span><span style="display:inline-block;width:16px;height:0;border-top:1.5px dashed #00d4aa;vertical-align:middle;margin-right:4px"></span>Swell (ft)</span>
+    </div>`;
 
     setHTML('swell-body', `
       <div class="swell-compass">
@@ -665,9 +774,15 @@ async function loadSwell() {
         </div>
       </div>
       <div class="divider"></div>
-      ${legend}${svg}${dirTable}
+      ${legend}
+      <div style="position:relative;margin-bottom:10px">
+        <canvas id="swell-chart-canvas" height="110" style="width:100%;height:110px;display:block;touch-action:none;cursor:crosshair"></canvas>
+        <div id="swell-chart-tip" style="display:none;position:absolute;top:6px;left:0;background:rgba(10,22,40,0.92);border:1px solid rgba(30,144,255,0.4);border-radius:6px;padding:6px 9px;pointer-events:none;min-width:130px;max-width:160px"></div>
+      </div>
+      ${dirTable}
       <div class="buoy-source" style="margin-top:6px">${srcLink}</div>
     `);
+    setupSwellChart(pts);
   } catch (e) {
     setHTML('swell-body', errorHTML('Swell data unavailable: ' + e.message));
   }
