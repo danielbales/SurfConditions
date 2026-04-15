@@ -1,39 +1,38 @@
-// ─── Windy-style Map View ─────────────────────────────────────────────────────
-// Animated particle map with wave markers + 24h time scrubber
+// ─── Windy-style Wave Map ─────────────────────────────────────────────────────
+// Self-contained canvas particle animation — no external CDN beyond Leaflet
 
-// Fixed grid covering Monterey Bay (4 rows × 3 cols = 12 pts)
-const GRID_LATS = [37.20, 36.85, 36.50, 36.15]; // north → south
-const GRID_LNGS = [-122.30, -121.95, -121.60];  // west → east
+// Grid: 4 rows × 3 cols over Monterey Bay (north→south, west→east)
+const GRID_LATS = [37.20, 36.85, 36.50, 36.15];
+const GRID_LNGS = [-122.30, -121.95, -121.60];
 const MAP_NX = 3, MAP_NY = 4;
-const MAP_DX = 0.35, MAP_DY = 0.35;
 
-// 9 forecast steps: now + 0h, +3h, +6h … +24h
-const MAP_STEP_OFFSETS = [0, 3, 6, 9, 12, 15, 18, 21, 24];
+// 9 forecast steps: now, +3h … +24h
+const MAP_OFFSETS = [0, 3, 6, 9, 12, 15, 18, 21, 24];
 
 let mapL = null;
-let mapVelocityLayer = null;
+let mapParticles = null;
 let mapWaveGroup = null;
 let mapInitialized = false;
-let mapWindFrames  = [];  // [{uArr, vArr}] × 9 steps
-let mapSwellFrames = [];  // [{uArr, vArr}] × 9 steps
-let mapSpotWaveData = []; // [{spot, hourly}] — Open-Meteo marine hourly
-let mapActiveLayer = 'wind'; // 'wind' | 'swell'
+let mapWindFrames  = [];   // [{uArr,vArr}] × 9
+let mapSwellFrames = [];   // [{uArr,vArr}] × 9
+let mapSpotData    = [];   // [{spot,hourly}]
+let mapActiveLayer = 'wind';
 let mapActiveStep  = 0;
-let mapBaseHourUTC = 0;   // UTC hour index for "now" in Open-Meteo arrays
+let mapBaseHour    = 0;    // UTC hour index for "now"
 
-// ── Open / Close ──────────────────────────────────────────────────────────────
+// ─── Open / Close ─────────────────────────────────────────────────────────────
 async function openMapView() {
   document.getElementById('map-view').style.display = 'block';
   document.body.style.overflow = 'hidden';
 
   if (!mapInitialized) {
     mapInitialized = true;
-    await loadMapLibraries();
+    await loadLeaflet();
     initLeafletMap();
-    fetchMapData();           // non-blocking — shows loading indicator
+    fetchMapData();          // non-blocking; shows loading indicator
   } else if (mapL) {
-    // Re-show: Leaflet needs a size recalc after the container was hidden
-    setTimeout(() => mapL.invalidateSize(), 60);
+    setTimeout(() => { mapL.invalidateSize(); mapParticles && mapParticles.resize(); }, 60);
+    if (mapParticles && mapWindFrames.length) mapParticles.start();
   }
 }
 
@@ -41,311 +40,362 @@ function closeMapView() {
   document.getElementById('map-view').style.display = 'none';
   document.getElementById('map-spot-panel').style.display = 'none';
   document.body.style.overflow = '';
+  mapParticles && mapParticles.pause();
 }
 
-// ── Library Loader ────────────────────────────────────────────────────────────
-async function loadMapLibraries() {
-  // Leaflet CSS
-  if (!document.getElementById('leaflet-css')) {
+// ─── Library Loader (Leaflet only) ───────────────────────────────────────────
+function loadLeaflet() {
+  return new Promise((resolve, reject) => {
+    if (window.L) { resolve(); return; }
     const lnk = document.createElement('link');
-    lnk.id = 'leaflet-css'; lnk.rel = 'stylesheet';
+    lnk.rel = 'stylesheet';
     lnk.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
     document.head.appendChild(lnk);
-  }
-  // leaflet-velocity CSS
-  if (!document.getElementById('lv-css')) {
-    const lnk = document.createElement('link');
-    lnk.id = 'lv-css'; lnk.rel = 'stylesheet';
-    lnk.href = 'https://unpkg.com/leaflet-velocity@2.1.0/dist/leaflet-velocity.css';
-    document.head.appendChild(lnk);
-  }
-  await mapLoadScript('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js');
-  await mapLoadScript('https://unpkg.com/leaflet-velocity@2.1.0/dist/leaflet-velocity.js');
-}
-
-function mapLoadScript(src) {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
     const s = document.createElement('script');
-    s.src = src; s.onload = resolve; s.onerror = reject;
+    s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    s.onload = resolve;
+    s.onerror = reject;
     document.head.appendChild(s);
   });
 }
 
-// ── Map Init ──────────────────────────────────────────────────────────────────
+// ─── Map Init ─────────────────────────────────────────────────────────────────
 function initLeafletMap() {
   const lats = SAVED_SPOTS.map(s => s.lat);
   const lngs = SAVED_SPOTS.map(s => s.lng);
-  const cx = lats.length ? lats.reduce((a, b) => a + b) / lats.length : 36.55;
-  const cy = lngs.length ? lngs.reduce((a, b) => a + b) / lngs.length : -121.93;
+  const cx = lats.length ? lats.reduce((a,b)=>a+b)/lats.length : 36.55;
+  const cy = lngs.length ? lngs.reduce((a,b)=>a+b)/lngs.length : -121.93;
 
-  mapL = L.map('leaflet-map', {
-    center: [cx, cy],
-    zoom: 10,
-    zoomControl: false,
-    attributionControl: false,
-  });
+  mapL = L.map('leaflet-map', { center:[cx,cy], zoom:10, zoomControl:false, attributionControl:false });
 
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    subdomains: 'abcd',
-    maxZoom: 19,
+    subdomains: 'abcd', maxZoom: 19,
   }).addTo(mapL);
 
-  // Minimal attribution
-  L.control.attribution({ position: 'bottomleft', prefix: false })
+  L.control.attribution({ position:'bottomleft', prefix:false })
     .addAttribution('© <a href="https://carto.com">CartoDB</a>')
     .addTo(mapL);
 
   mapWaveGroup = L.layerGroup().addTo(mapL);
+  mapParticles = new ParticleLayer(mapL);
 }
 
-// ── Data Fetch ────────────────────────────────────────────────────────────────
+// ─── Canvas Particle Layer ────────────────────────────────────────────────────
+class ParticleLayer {
+  constructor(map) {
+    this.map = map;
+    this.uGrid = null;
+    this.vGrid = null;
+    this.isWind = true;
+    this.particles = [];
+    this.running = false;
+    this.raf = null;
+    this.N = 900;
+    this.maxAge = 65;
+
+    const size = map.getSize();
+    this.canvas = document.createElement('canvas');
+    this.canvas.width  = size.x;
+    this.canvas.height = size.y;
+    this.canvas.style.cssText = 'position:absolute;inset:0;z-index:350;pointer-events:none';
+    map.getContainer().appendChild(this.canvas);
+    this.ctx = this.canvas.getContext('2d');
+
+    map.on('movestart',  () => this.pause());
+    map.on('moveend',    () => { this.resize(); if (this.uGrid) this.start(); });
+    map.on('zoomstart',  () => this.pause());
+    map.on('zoomend',    () => { this.resize(); if (this.uGrid) this.start(); });
+  }
+
+  resize() {
+    const s = this.map.getSize();
+    this.canvas.width  = s.x;
+    this.canvas.height = s.y;
+    this.spawnAll();
+  }
+
+  setFrame(uArr, vArr, isWind) {
+    this.uGrid = uArr;
+    this.vGrid = vArr;
+    this.isWind = isWind;
+    this.spawnAll();
+    this.start();
+  }
+
+  // Bilinear interpolation of U/V at any lat/lng
+  uv(lat, lng) {
+    const lats = GRID_LATS, lngs = GRID_LNGS;
+    const ny = MAP_NY, nx = MAP_NX;
+
+    const la = Math.max(lats[ny-1], Math.min(lats[0],    lat));
+    const lo = Math.max(lngs[0],    Math.min(lngs[nx-1], lng));
+
+    let ri = 0;
+    for (let i = 0; i < ny-1; i++) { if (la <= lats[i] && la >= lats[i+1]) { ri=i; break; } }
+    let ci = 0;
+    for (let j = 0; j < nx-1; j++) { if (lo >= lngs[j] && lo <= lngs[j+1]) { ci=j; break; } }
+
+    const dy = (lats[ri] - la)  / (lats[ri] - lats[ri+1]);
+    const dx = (lo - lngs[ci])  / (lngs[ci+1] - lngs[ci]);
+    const idx = (r,c) => r*nx+c;
+    const bl  = (arr) =>
+      arr[idx(ri,  ci  )]*(1-dx)*(1-dy) +
+      arr[idx(ri,  ci+1)]*   dx *(1-dy) +
+      arr[idx(ri+1,ci  )]*(1-dx)*   dy  +
+      arr[idx(ri+1,ci+1)]*   dx *   dy;
+
+    return { u: bl(this.uGrid), v: bl(this.vGrid) };
+  }
+
+  spawnAll() {
+    const b = this.map.getBounds();
+    this.particles = Array.from({ length: this.N }, () => this._rp(b));
+  }
+
+  _rp(b) {
+    b = b || this.map.getBounds();
+    return {
+      lat: b.getSouth() + Math.random() * (b.getNorth()-b.getSouth()),
+      lng: b.getWest()  + Math.random() * (b.getEast() -b.getWest()),
+      age: Math.floor(Math.random() * this.maxAge),
+    };
+  }
+
+  color(speed) {
+    const stops = this.isWind
+      ? [[0,'#29b6f6'],[4,'#00e5ff'],[8,'#69f0ae'],[13,'#ffd600'],[18,'#ff9800'],[24,'#f44336']]
+      : [[0,'#1565c0'],[1,'#1976d2'],[2,'#42a5f5'],[3.5,'#80d8ff'],[5,'#b3e5fc'],[6,'#e1f5fe']];
+    for (let i = stops.length-1; i >= 0; i--) {
+      if (speed >= stops[i][0]) return stops[i][1];
+    }
+    return stops[0][1];
+  }
+
+  tick() {
+    if (!this.running || !this.uGrid) return;
+    const ctx = this.ctx;
+    const w = this.canvas.width, h = this.canvas.height;
+    const b = this.map.getBounds();
+    const scale = this.isWind ? 0.0045 : 0.008;
+
+    ctx.fillStyle = 'rgba(6,14,29,0.18)';
+    ctx.fillRect(0,0,w,h);
+    ctx.lineWidth = 1.3;
+
+    for (const p of this.particles) {
+      const {u, v} = this.uv(p.lat, p.lng);
+      const speed  = Math.sqrt(u*u + v*v);
+
+      if (speed < 0.15) { Object.assign(p, this._rp(b)); continue; }
+
+      const p0 = this.map.latLngToContainerPoint([p.lat, p.lng]);
+      p.lng += u * scale;
+      p.lat += v * scale;
+      p.age++;
+      const p1 = this.map.latLngToContainerPoint([p.lat, p.lng]);
+
+      ctx.globalAlpha = Math.min(1, p.age/12) * Math.max(0, 1-p.age/this.maxAge) * 0.85;
+      ctx.strokeStyle = this.color(speed);
+      ctx.beginPath();
+      ctx.moveTo(p0.x, p0.y);
+      ctx.lineTo(p1.x, p1.y);
+      ctx.stroke();
+
+      if (p.age > this.maxAge
+          || p.lat < b.getSouth() || p.lat > b.getNorth()
+          || p.lng < b.getWest()  || p.lng > b.getEast()) {
+        Object.assign(p, this._rp(b));
+      }
+    }
+
+    ctx.globalAlpha = 1;
+    this.raf = requestAnimationFrame(() => this.tick());
+  }
+
+  start()  { this.running = true;  this.raf = requestAnimationFrame(() => this.tick()); }
+  pause()  { this.running = false; if (this.raf) cancelAnimationFrame(this.raf); }
+  clear()  { this.pause(); this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height); }
+}
+
+// ─── Data Fetch ───────────────────────────────────────────────────────────────
 async function fetchMapData() {
   showMapLoading(true);
+  mapBaseHour = new Date().getUTCHours();
 
-  // Base hour = current UTC hour (Open-Meteo hourly[0] = midnight UTC today)
-  mapBaseHourUTC = new Date().getUTCHours();
-
-  try {
-    // Wind grid: 12 pts × forecast_days=2
-    const windReqs = [];
-    for (const lat of GRID_LATS) {
-      for (const lng of GRID_LNGS) {
-        windReqs.push(
-          fetch(
-            `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
-            `&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&timezone=UTC&forecast_days=2`
-          ).then(r => r.json()).catch(() => null)
-        );
-      }
-    }
-
-    // Swell grid: 12 pts
-    const swellGridReqs = [];
-    for (const lat of GRID_LATS) {
-      for (const lng of GRID_LNGS) {
-        swellGridReqs.push(
-          fetch(
-            `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lng}` +
-            `&hourly=wave_height,wave_direction&timezone=UTC&forecast_days=2`
-          ).then(r => r.json()).catch(() => null)
-        );
-      }
-    }
-
-    // Spot wave data for markers
-    const spotReqs = SAVED_SPOTS.map(sp =>
-      fetch(
-        `https://marine-api.open-meteo.com/v1/marine?latitude=${sp.lat}&longitude=${sp.lng}` +
-        `&hourly=wave_height,wave_direction,wave_period&timezone=UTC&forecast_days=2`
-      ).then(r => r.json()).catch(() => null)
-    );
-
-    const [windGrid, swellGrid, ...spotData] = await Promise.all([
-      Promise.all(windReqs),
-      Promise.all(swellGridReqs),
-      ...spotReqs,
+  // Fetch with 10s timeout
+  const tFetch = (url) =>
+    Promise.race([
+      fetch(url).then(r => r.ok ? r.json() : null).catch(() => null),
+      new Promise(res => setTimeout(() => res(null), 10000)),
     ]);
 
-    // Pre-compute frames for all 9 time steps
-    mapWindFrames  = MAP_STEP_OFFSETS.map(off => buildGridFrame(windGrid,  off, 'wind'));
-    mapSwellFrames = MAP_STEP_OFFSETS.map(off => buildGridFrame(swellGrid, off, 'swell'));
+  try {
+    // Wind grid: 12 pts (4 rows × 3 cols)
+    const windReqs = [];
+    for (const lat of GRID_LATS) for (const lng of GRID_LNGS) {
+      windReqs.push(tFetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
+        `&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&timezone=UTC&forecast_days=2`
+      ));
+    }
 
-    mapSpotWaveData = SAVED_SPOTS.map((sp, i) => ({ spot: sp, hourly: spotData[i]?.hourly }));
+    // Spot marine: wave height/dir/period at each saved spot
+    const spotReqs = SAVED_SPOTS.map(sp => tFetch(
+      `https://marine-api.open-meteo.com/v1/marine?latitude=${sp.lat}&longitude=${sp.lng}` +
+      `&hourly=wave_height,wave_direction,wave_period&timezone=UTC&forecast_days=2`
+    ));
 
-    // Wire up slider
-    const slider = document.getElementById('map-time-slider');
-    slider.max = MAP_STEP_OFFSETS.length - 1;
-    slider.value = 0;
+    const windGrid  = await Promise.all(windReqs);
+    const spotMarine = await Promise.all(spotReqs);
+
+    mapSpotData = SAVED_SPOTS.map((sp, i) => ({ spot:sp, hourly: spotMarine[i]?.hourly }));
+
+    mapWindFrames  = MAP_OFFSETS.map(off => buildGridFrame(windGrid, off));
+    // Swell frames built from spot data — no extra API calls
+    mapSwellFrames = MAP_OFFSETS.map(off => buildSwellFromSpots(off));
+
+    const slider   = document.getElementById('map-time-slider');
+    slider.max     = MAP_OFFSETS.length - 1;
+    slider.value   = 0;
 
     updateMapForStep(0);
-  } catch (e) {
-    console.error('Map fetch error:', e);
+  } catch(e) {
+    console.error('Map data error:', e);
   } finally {
     showMapLoading(false);
   }
 }
 
-// ── Frame Builder ─────────────────────────────────────────────────────────────
-function buildGridFrame(gridData, hourOffset, type) {
-  // gridData: 12-element array, row-major: [GRID_LATS × GRID_LNGS]
-  const hourIdx = mapBaseHourUTC + hourOffset;
+// ─── Frame Builders ───────────────────────────────────────────────────────────
+function buildGridFrame(gridData, hourOffset) {
+  const h = mapBaseHour + hourOffset;
   const uArr = [], vArr = [];
-
   for (let i = 0; i < gridData.length; i++) {
-    const h = gridData[i]?.hourly;
-    let speed = 0, dir = 0;
-
-    if (type === 'wind') {
-      speed = h?.wind_speed_10m?.[hourIdx]  ?? 0;
-      dir   = h?.wind_direction_10m?.[hourIdx] ?? 0;
-    } else {
-      // swell: scale wave height so particles are visible
-      speed = (h?.wave_height?.[hourIdx] ?? 0) * 0.8;
-      dir   = h?.wave_direction?.[hourIdx] ?? 270;
-    }
-
-    const rad = (dir * Math.PI) / 180;
-    // Met convention: direction FROM → negate for motion vector
-    uArr.push(-speed * Math.sin(rad));
-    vArr.push(-speed * Math.cos(rad));
+    const hr  = gridData[i]?.hourly;
+    const spd = hr?.wind_speed_10m?.[h]  ?? 0;
+    const dir = hr?.wind_direction_10m?.[h] ?? 0;
+    const rad = dir * Math.PI / 180;
+    uArr.push(-spd * Math.sin(rad));
+    vArr.push(-spd * Math.cos(rad));
   }
-
   return { uArr, vArr };
 }
 
-function makeVelocityData(frame) {
-  const makeLayer = (data, num) => ({
-    header: {
-      parameterUnit: 'm.s-1',
-      parameterNumber: num,
-      parameterNumberName: num === 2 ? 'eastward_wind' : 'northward_wind',
-      la1: GRID_LATS[0],
-      la2: GRID_LATS[MAP_NY - 1],
-      lo1: GRID_LNGS[0],
-      lo2: GRID_LNGS[MAP_NX - 1],
-      nx: MAP_NX,
-      ny: MAP_NY,
-      dx: MAP_DX,
-      dy: MAP_DY,
-      refTime: new Date().toISOString(),
-      forecastTime: 0,
-    },
-    data,
-  });
-  return [makeLayer(frame.uArr, 2), makeLayer(frame.vArr, 3)];
+function buildSwellFromSpots(hourOffset) {
+  // Build 12-pt swell grid by nearest-spot interpolation (no extra API calls)
+  const h = mapBaseHour + hourOffset;
+  const uArr = [], vArr = [];
+  for (const lat of GRID_LATS) {
+    for (const lng of GRID_LNGS) {
+      let best = null, bestD = Infinity;
+      for (const { spot, hourly } of mapSpotData) {
+        const d = Math.hypot(spot.lat-lat, spot.lng-lng);
+        if (d < bestD) { bestD=d; best=hourly; }
+      }
+      const height = best?.wave_height?.[h]   ?? 0;
+      const dir    = best?.wave_direction?.[h] ?? 270;
+      const speed  = height * 0.9;
+      const rad    = dir * Math.PI / 180;
+      uArr.push(-speed * Math.sin(rad));
+      vArr.push(-speed * Math.cos(rad));
+    }
+  }
+  return { uArr, vArr };
 }
 
-// ── Map Update ────────────────────────────────────────────────────────────────
+// ─── Map Update ───────────────────────────────────────────────────────────────
 function updateMapForStep(stepIdx) {
   mapActiveStep = stepIdx;
-  const offset  = MAP_STEP_OFFSETS[stepIdx];
-  const hourIdx = mapBaseHourUTC + offset;
+  const offset = MAP_OFFSETS[stepIdx];
+  const h      = mapBaseHour + offset;
 
   // Time label
-  const now = new Date();
-  const forecastMs  = now.getTime() + offset * 3600000;
-  const forecastDt  = new Date(forecastMs);
-  const label = offset === 0
-    ? 'Now'
-    : forecastDt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
-  document.getElementById('map-time-label').textContent = label;
+  const dt = new Date(Date.now() + offset * 3600000);
+  document.getElementById('map-time-label').textContent =
+    offset === 0 ? 'Now' : dt.toLocaleTimeString([], {hour:'numeric', minute:'2-digit', hour12:true});
 
-  // Remove old velocity layer
-  if (mapVelocityLayer) { mapL.removeLayer(mapVelocityLayer); mapVelocityLayer = null; }
-
-  const frame = mapActiveLayer === 'wind' ? mapWindFrames[stepIdx] : mapSwellFrames[stepIdx];
-
-  if (frame && typeof L.velocityLayer === 'function') {
-    const isWind = mapActiveLayer === 'wind';
-    mapVelocityLayer = L.velocityLayer({
-      displayValues: false,
-      data: makeVelocityData(frame),
-      maxVelocity: isWind ? 20 : 5,
-      minVelocity: 0,
-      velocityScale: isWind ? 0.007 : 0.014,
-      opacity: 0.88,
-      colorScale: isWind
-        ? ['#29b6f6','#00e5ff','#69f0ae','#ffd600','#ff9800','#f44336']
-        : ['#1565c0','#1976d2','#42a5f5','#80d8ff','#b3e5fc','#e1f5fe'],
-      particleAge: 70,
-      particleMultiplier: 0.0028,
-      frameRate: 20,
-    });
-    mapVelocityLayer.addTo(mapL);
+  // Particle layer
+  const frames = mapActiveLayer === 'wind' ? mapWindFrames : mapSwellFrames;
+  const frame  = frames[stepIdx];
+  if (frame && mapParticles) {
+    mapParticles.clear();
+    mapParticles.setFrame(frame.uArr, frame.vArr, mapActiveLayer === 'wind');
   }
 
-  // Update wave markers
+  // Wave markers
   mapWaveGroup.clearLayers();
-  mapSpotWaveData.forEach(({ spot, hourly }) => {
-    const height  = hourly?.wave_height?.[hourIdx]   ?? null;
-    const dir     = hourly?.wave_direction?.[hourIdx] ?? null;
-    const period  = hourly?.wave_period?.[hourIdx]   ?? null;
-    if (height === null) return;
+  for (const { spot, hourly } of mapSpotData) {
+    const height = hourly?.wave_height?.[h]    ?? null;
+    const dir    = hourly?.wave_direction?.[h] ?? null;
+    const period = hourly?.wave_period?.[h]    ?? null;
+    if (height === null) continue;
 
     const ft = height * 3.281;
-    const color = ft >= 8 ? '#ff1744'
-                : ft >= 5 ? '#ff9800'
-                : ft >= 3 ? '#00e5ff'
-                : ft >= 1.5 ? '#69f0ae'
-                : '#4a7a96';
+    const color = ft >= 8 ? '#ff1744' : ft >= 5 ? '#ff9800' : ft >= 3 ? '#00e5ff'
+                : ft >= 1.5 ? '#69f0ae' : '#4a7a96';
 
-    // Glow halo
     L.circleMarker([spot.lat, spot.lng], {
       radius: Math.max(22, ft * 6),
-      fillColor: color,
-      fillOpacity: 0.10,
-      color: color,
-      weight: 1.5,
-      opacity: 0.32,
-      interactive: false,
+      fillColor: color, fillOpacity: 0.10,
+      color: color, weight: 1.5, opacity: 0.3, interactive: false,
     }).addTo(mapWaveGroup);
 
-    // Travel direction = "from" dir + 180
-    const travelDir = dir !== null ? (dir + 180) % 360 : null;
-    const arrowHtml = travelDir !== null
-      ? `<div class="wm-arrow" style="transform:rotate(${travelDir}deg)">↑</div>`
-      : '';
-
+    const travel = dir !== null ? (dir + 180) % 360 : null;
     const icon = L.divIcon({
       className: 'wm-wrap',
       html: `<div class="wm-pill" style="border-color:${color};color:${color}">
                <span class="wm-ft">${ft.toFixed(1)}<small>ft</small></span>
                <span class="wm-name">${escapeHtml(spot.name.split(' ')[0])}</span>
-               ${arrowHtml}
+               ${travel !== null ? `<span class="wm-arrow" style="transform:rotate(${travel}deg)">↑</span>` : ''}
              </div>`,
-      iconSize:   [74, 60],
-      iconAnchor: [37, 30],
+      iconSize:[74,62], iconAnchor:[37,31],
     });
 
-    L.marker([spot.lat, spot.lng], { icon, riseOnHover: true })
-      .on('click', () => showMapSpotPanel(spot, ft, period, dir, travelDir, label))
+    L.marker([spot.lat, spot.lng], { icon, riseOnHover:true })
+      .on('click', () => showMapSpotPanel(spot, ft, period, dir, travel))
       .addTo(mapWaveGroup);
-  });
+  }
 }
 
-// ── Spot Info Panel ───────────────────────────────────────────────────────────
-function showMapSpotPanel(spot, ft, period, dir, travelDir, timeLabel) {
-  const ftStr  = ft.toFixed(1);
-  const perStr = period ? period.toFixed(0) + 's' : '—';
-  const dirStr = dir !== null ? mapCompassDir(dir) : '—';
-  const color  = +ftStr >= 8 ? '#ff1744'
-               : +ftStr >= 5 ? '#ff9800'
-               : +ftStr >= 3 ? '#00e5ff' : '#69f0ae';
-  const arrowHtml = travelDir !== null
-    ? `<span style="display:inline-block;transform:rotate(${travelDir}deg);font-size:18px">↑</span>`
-    : '';
-
+// ─── Spot Panel ───────────────────────────────────────────────────────────────
+function showMapSpotPanel(spot, ft, period, dir, travel) {
+  const color = ft >= 8 ? '#ff1744' : ft >= 5 ? '#ff9800' : ft >= 3 ? '#00e5ff' : '#69f0ae';
+  const lbl   = document.getElementById('map-time-label').textContent;
   document.getElementById('map-spot-panel').innerHTML = `
     <div class="msp-hdr">
       <span class="msp-name">${escapeHtml(spot.name)}</span>
-      <span class="msp-time">${timeLabel}</span>
+      <span class="msp-time">${lbl}</span>
       <button class="msp-close" onclick="document.getElementById('map-spot-panel').style.display='none'">✕</button>
     </div>
     <div class="msp-stats">
-      <div class="msp-stat"><span class="msp-val" style="color:${color}">${ftStr}</span><span class="msp-lbl">ft</span></div>
-      <div class="msp-stat"><span class="msp-val">${perStr}</span><span class="msp-lbl">period</span></div>
-      <div class="msp-stat"><span class="msp-val" style="color:${color}">${dirStr} ${arrowHtml}</span><span class="msp-lbl">swell</span></div>
-    </div>
-  `;
+      <div class="msp-stat"><span class="msp-val" style="color:${color}">${ft.toFixed(1)}</span><span class="msp-lbl">ft</span></div>
+      <div class="msp-stat"><span class="msp-val">${period ? period.toFixed(0)+'s' : '—'}</span><span class="msp-lbl">period</span></div>
+      <div class="msp-stat">
+        <span class="msp-val">
+          ${dir !== null ? mapCompass(dir) : '—'}
+          ${travel !== null ? `<span style="display:inline-block;transform:rotate(${travel}deg)">↑</span>` : ''}
+        </span>
+        <span class="msp-lbl">swell</span>
+      </div>
+    </div>`;
   document.getElementById('map-spot-panel').style.display = 'block';
 }
 
-// ── Layer Toggle ──────────────────────────────────────────────────────────────
+// ─── Layer Toggle ─────────────────────────────────────────────────────────────
 function switchMapLayer(type) {
   mapActiveLayer = type;
-  document.getElementById('map-btn-wind').classList.toggle('active',  type === 'wind');
-  document.getElementById('map-btn-swell').classList.toggle('active', type === 'swell');
+  document.getElementById('map-btn-wind').classList.toggle('active',  type==='wind');
+  document.getElementById('map-btn-swell').classList.toggle('active', type==='swell');
   if (mapWindFrames.length) updateMapForStep(mapActiveStep);
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function showMapLoading(show) {
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function showMapLoading(on) {
   const el = document.getElementById('map-loading');
-  if (el) el.style.display = show ? 'block' : 'none';
+  if (el) el.style.display = on ? 'block' : 'none';
 }
 
-function mapCompassDir(deg) {
-  const d = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
-  return d[Math.round(deg / 22.5) % 16];
+function mapCompass(deg) {
+  return ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][
+    Math.round(deg/22.5) % 16];
 }
