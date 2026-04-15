@@ -10,11 +10,22 @@ if ('serviceWorker' in navigator) {
     .then(reg => {
       _swReg = reg;
       if ('PushManager' in window) {
-        document.getElementById('alertBtn').style.display = '';
-        updateAlertBtn(reg);
+        const alertBtn = document.getElementById('alertBtn');
+        if (alertBtn) { alertBtn.style.display = ''; updateAlertBtn(reg); }
       }
     })
     .catch(() => {});
+}
+
+// ─── Bottom Sheet ─────────────────────────────────────────────────────────────
+function expandSheet() {
+  document.getElementById('bottom-sheet').classList.add('expanded');
+}
+function collapseSheet() {
+  document.getElementById('bottom-sheet').classList.remove('expanded');
+}
+function toggleSheet() {
+  document.getElementById('bottom-sheet').classList.toggle('expanded');
 }
 
 function urlBase64ToUint8Array(base64String) {
@@ -348,7 +359,7 @@ function renderLocationPills() {
   container.innerHTML = SAVED_SPOTS.map(s => `
     <button class="loc-btn${s.id === ACTIVE?.id ? ' active' : ''}"
             data-id="${s.id}"
-            onclick="setLocation('${s.id}')">${escapeHtml(s.name)}</button>
+            onclick="event.stopPropagation();setLocation('${s.id}')">${escapeHtml(s.name)}</button>
   `).join('');
 }
 
@@ -386,8 +397,9 @@ function updateCardVisibility() {
   if (ripCard)    ripCard.style.display    = hasRip    ? '' : 'none';
 
   if (hasTides) {
-    const tidesTitle = document.querySelector('#card-tides .card-title');
-    if (tidesTitle) tidesTitle.innerHTML = `<span class="icon">🌊</span> Tides · Station ${ACTIVE.tideStation}`;
+    const tidesTitle = document.querySelector('#card-tides .sheet-sec-title')
+                    || document.querySelector('#tides-title-el');
+    if (tidesTitle) tidesTitle.textContent = `🌊 Tides · Station ${ACTIVE.tideStation}`;
   }
 }
 
@@ -468,6 +480,12 @@ async function loadBuoy() {
     const c = d.current;
     const wvhtFt = c.wave_height?.toFixed(1) ?? '—';
     const dpd    = c.wave_period?.toFixed(0) ?? '—';
+
+    // Update peek bar
+    const peekVal = document.getElementById('peek-wave-val');
+    const peekPer = document.getElementById('peek-wave-per');
+    if (peekVal) peekVal.textContent = wvhtFt;
+    if (peekPer) peekPer.textContent = dpd !== '—' ? dpd + 's' : '';
     const mwd    = c.wave_direction ?? null;
     const dirStr = mwd !== null ? degToCompass(mwd) : '—';
     const swHt   = c.swell_wave_height?.toFixed(1) ?? '—';
@@ -1254,7 +1272,7 @@ async function refreshAll() {
   btn.classList.add('spinning');
   setHTML('lastUpdated', 'Updating…');
 
-  // Reset visible card bodies to loading state
+  // Reset sheet bodies to loading state
   setHTML('buoy-body',          loadingHTML());
   setHTML('swell-body',         loadingHTML());
   setHTML('wind-body',          loadingHTML());
@@ -1273,6 +1291,7 @@ async function refreshAll() {
 
   btn.classList.remove('spinning');
   setHTML('lastUpdated', `Updated ${fmtTime(new Date())}`);
+  expandSheet();
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
@@ -1289,6 +1308,9 @@ if (SAVED_SPOTS.length === 0) {
   updateCardVisibility();
   refreshAll();
 }
+
+// Map initializes after Leaflet script loads (map.js runs after app.js)
+// initMap() is called at the bottom of map.js via window.onload or directly
 
 // Auto-refresh every 10 minutes
 setInterval(refreshAll, 10 * 60 * 1000);
