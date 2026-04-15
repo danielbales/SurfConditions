@@ -21,7 +21,8 @@
     <div class="subtitle" id="location-subtitle"></div>
   </div>
   <div class="header-right">
-<button class="refresh-btn" id="refreshBtn" onclick="refreshAll()">
+    <button class="map-open-btn" onclick="openMapView()" title="Wave Map">🗺</button>
+    <button class="refresh-btn" id="refreshBtn" onclick="refreshAll()">
       <span class="icon">↻</span> Refresh
     </button>
   </div>
@@ -140,6 +141,43 @@
   </div>
 </div>
 
+<!-- ── Map View Overlay (Windy-style) ──────────────────────────────────────── -->
+<div id="map-view">
+
+  <!-- Floating header bar -->
+  <div class="map-hdr">
+    <button class="map-back-btn" onclick="closeMapView()">←</button>
+    <span class="map-hdr-title">Wave Map</span>
+    <div class="map-layer-toggle">
+      <button id="map-btn-wind"  class="map-layer-btn active" onclick="switchMapLayer('wind')">Wind</button>
+      <button id="map-btn-swell" class="map-layer-btn"        onclick="switchMapLayer('swell')">Swell</button>
+    </div>
+    <span id="map-loading">Loading…</span>
+  </div>
+
+  <!-- Leaflet renders here -->
+  <div id="leaflet-map"></div>
+
+  <!-- Spot info bottom sheet (tap on marker) -->
+  <div id="map-spot-panel" class="map-spot-panel"></div>
+
+  <!-- Time scrubber -->
+  <div class="map-slider-bar">
+    <div class="map-slider-row">
+      <span id="map-time-label" class="map-time-lbl">Now</span>
+      <input type="range" id="map-time-slider" class="map-slider"
+             min="0" max="8" value="0" step="1"
+             oninput="updateMapForStep(+this.value)">
+      <span class="map-time-end">+24h</span>
+    </div>
+    <div class="map-tick-row">
+      <span>Now</span><span>+6h</span><span>+12h</span><span>+18h</span><span>+24h</span>
+    </div>
+  </div>
+
+</div>
+
 <script src="app.js"></script>
+<script src="map.js"></script>
 </body>
 </html>
