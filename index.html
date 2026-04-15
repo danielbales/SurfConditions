@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#0a1628">
+  <meta name="theme-color" content="#060e1d">
   <meta name="description" content="Real-time surf conditions for your local spots">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -11,109 +11,163 @@
   <meta name="apple-mobile-web-app-title" content="Surf">
   <title>DB's Local</title>
   <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<header>
-  <div class="header-left">
-    <h1>🌊 DB's Local</h1>
-    <div class="subtitle" id="location-subtitle"></div>
+<!-- ── Full-screen map ─────────────────────────────────────────────────────── -->
+<div id="map"></div>
+
+<!-- ── Floating top bar ───────────────────────────────────────────────────── -->
+<header class="top-bar">
+  <div class="tb-brand-wrap">
+    <div class="tb-brand">🌊 <span class="tb-title">DB's Local</span></div>
+    <div class="tb-subtitle" id="location-subtitle"></div>
   </div>
-  <div class="header-right">
-    <button class="map-open-btn" onclick="openMapView()" title="Wave Map">🗺</button>
-    <button class="refresh-btn" id="refreshBtn" onclick="refreshAll()">
-      <span class="icon">↻</span> Refresh
-    </button>
+  <div class="tb-right">
+    <div class="map-loading-dot" id="map-loading" style="display:none"></div>
+    <button class="tb-btn spin-target" id="refreshBtn" onclick="refreshAll()" title="Refresh">↻</button>
+    <button class="tb-btn" onclick="openSpotEditor(true)" title="Edit spots">+</button>
   </div>
 </header>
 
-<div class="location-selector" id="location-selector"></div>
+<!-- ── Left layer panel (Windy-style) ─────────────────────────────────────── -->
+<nav class="layer-panel">
+  <button class="layer-btn active" id="layer-btn-wind" onclick="switchMapLayer('wind')">
+    <span class="layer-icon">💨</span>
+    <span class="layer-lbl">Wind</span>
+  </button>
+  <button class="layer-btn" id="layer-btn-swell" onclick="switchMapLayer('swell')">
+    <span class="layer-icon">🌊</span>
+    <span class="layer-lbl">Swell</span>
+  </button>
+  <button class="layer-btn" id="layer-btn-none" onclick="switchMapLayer('none')">
+    <span class="layer-icon">⬛</span>
+    <span class="layer-lbl">Off</span>
+  </button>
+</nav>
 
-<div class="last-updated" id="lastUpdated">Loading…</div>
-
-<main>
-
-  <!-- Wave Observations (Open-Meteo Marine current) -->
-  <div class="card" id="card-buoy">
-    <div class="card-header">
-      <div class="card-title"><span class="icon">📡</span> Wave Observations</div>
-      <div class="card-badge" id="buoy-badge" style="background:rgba(0,212,170,0.15);color:#00d4aa">MODEL</div>
+<!-- ── Bottom time bar (always visible) ───────────────────────────────────── -->
+<div class="time-bar">
+  <button class="play-btn" id="playBtn" onclick="togglePlay()">▶</button>
+  <div class="time-scrubber">
+    <input type="range" id="map-time-slider" class="time-input"
+           min="0" max="8" value="0" step="1"
+           oninput="updateMapForStep(+this.value)">
+    <div class="time-ticks">
+      <span>Now</span><span>+6h</span><span>+12h</span><span>+18h</span><span>+24h</span>
     </div>
-    <div class="card-body" id="buoy-body">
-      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+  </div>
+  <span class="time-now-lbl" id="map-time-label">Now</span>
+</div>
+
+<!-- ── Bottom sheet (Windy-style forecast drawer) ─────────────────────────── -->
+<div class="bottom-sheet" id="bottom-sheet">
+
+  <!-- Drag handle + peek area -->
+  <div class="sheet-handle-wrap" id="sheet-handle-wrap">
+    <div class="sheet-drag-bar"></div>
+    <div class="sheet-peek">
+      <!-- Spot pills rendered by renderLocationPills() -->
+      <div class="peek-spots" id="location-selector"></div>
+      <!-- Current wave summary -->
+      <div class="peek-summary" onclick="toggleSheet()">
+        <span class="peek-val" id="peek-wave-val">—</span>
+        <span class="peek-unit">ft</span>
+        <span class="peek-per" id="peek-wave-per"></span>
+        <span class="peek-chevron" id="peek-chevron">▲</span>
+      </div>
     </div>
   </div>
 
-  <!-- Swell Forecast -->
-  <div class="card" id="card-swell">
-    <div class="card-header">
-      <div class="card-title"><span class="icon">🌊</span> Swell Forecast</div>
-      <div class="card-badge" style="background:rgba(30,144,255,0.15);color:#1e90ff">OPEN-METEO</div>
+  <!-- Scrollable content (hidden when peeking) -->
+  <div class="sheet-body" id="sheet-body">
+
+    <div class="sheet-updated" id="lastUpdated">Loading…</div>
+
+    <!-- Wave Observations -->
+    <div class="sheet-sec">
+      <div class="sheet-sec-hdr">
+        <span class="sheet-sec-title">📡 Wave Observations</span>
+        <span class="sheet-badge" id="buoy-badge" style="background:rgba(0,212,170,0.15);color:#00d4aa">MODEL</span>
+      </div>
+      <div class="sheet-sec-body" id="buoy-body">
+        <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+      </div>
     </div>
-    <div class="card-body" id="swell-body">
-      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+
+    <!-- Swell Forecast -->
+    <div class="sheet-sec">
+      <div class="sheet-sec-hdr">
+        <span class="sheet-sec-title">🌊 Swell Forecast</span>
+        <span class="sheet-badge" style="background:rgba(30,144,255,0.15);color:#1e90ff">OPEN-METEO</span>
+      </div>
+      <div class="sheet-sec-body" id="swell-body">
+        <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+      </div>
     </div>
+
+    <!-- Wind -->
+    <div class="sheet-sec">
+      <div class="sheet-sec-hdr">
+        <span class="sheet-sec-title">💨 Wind</span>
+        <span class="sheet-badge" id="wind-badge" style="background:rgba(0,200,83,0.15);color:#00c853">CALM</span>
+      </div>
+      <div class="sheet-sec-body" id="wind-body">
+        <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+      </div>
+    </div>
+
+    <!-- Wind Forecast -->
+    <div class="sheet-sec">
+      <div class="sheet-sec-hdr">
+        <span class="sheet-sec-title">📈 Wind Forecast</span>
+        <span class="sheet-badge" style="background:rgba(0,200,83,0.15);color:#00c853">48H</span>
+      </div>
+      <div class="sheet-sec-body" id="wind-forecast-body">
+        <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+      </div>
+    </div>
+
+    <!-- Tides (US only) -->
+    <div class="sheet-sec" id="card-tides" style="display:none">
+      <div class="sheet-sec-hdr">
+        <span class="sheet-sec-title" id="tides-title-el">🌊 Tides</span>
+        <span class="sheet-badge" style="background:rgba(155,109,255,0.15);color:#9b6dff">NOAA</span>
+      </div>
+      <div class="sheet-sec-body" id="tides-body">
+        <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+      </div>
+    </div>
+
+    <!-- Marine Forecast (US only) -->
+    <div class="sheet-sec" id="card-marine" style="display:none">
+      <div class="sheet-sec-hdr">
+        <span class="sheet-sec-title">⚓ Marine Forecast</span>
+        <span class="sheet-badge" style="background:rgba(30,144,255,0.15);color:#1e90ff">NWS</span>
+      </div>
+      <div class="sheet-sec-body" id="marine-body">
+        <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+      </div>
+    </div>
+
+    <!-- Rip Current (US only) -->
+    <div class="sheet-sec" id="card-rip" style="display:none">
+      <div class="sheet-sec-hdr">
+        <span class="sheet-sec-title">⚠️ Rip Current Risk</span>
+        <span class="sheet-badge" id="rip-badge" style="background:rgba(0,200,83,0.15);color:#00c853">LOW</span>
+      </div>
+      <div class="sheet-sec-body" id="rip-body">
+        <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+      </div>
+    </div>
+
+    <div class="sheet-spacer"></div>
   </div>
+</div>
 
-  <!-- Wind -->
-  <div class="card" id="card-wind">
-    <div class="card-header">
-      <div class="card-title"><span class="icon">💨</span> Wind</div>
-      <div class="card-badge" id="wind-badge" style="background:rgba(0,200,83,0.15);color:#00c853">CALM</div>
-    </div>
-    <div class="card-body" id="wind-body">
-      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-    </div>
-  </div>
-
-  <!-- Wind Forecast -->
-  <div class="card" id="card-wind-forecast">
-    <div class="card-header">
-      <div class="card-title"><span class="icon">📈</span> Wind Forecast</div>
-      <div class="card-badge" style="background:rgba(0,200,83,0.15);color:#00c853">48H</div>
-    </div>
-    <div class="card-body" id="wind-forecast-body">
-      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-    </div>
-  </div>
-
-  <!-- Tides (US only — hidden until US spot loaded) -->
-  <div class="card" id="card-tides" style="display:none">
-    <div class="card-header">
-      <div class="card-title"><span class="icon">🌊</span> Tides</div>
-      <div class="card-badge" style="background:rgba(155,109,255,0.15);color:#9b6dff">NOAA</div>
-    </div>
-    <div class="card-body" id="tides-body">
-      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-    </div>
-  </div>
-
-  <!-- Marine Forecast (US only) -->
-  <div class="card" id="card-marine" style="display:none">
-    <div class="card-header">
-      <div class="card-title"><span class="icon">⚓</span> Marine Forecast</div>
-      <div class="card-badge" style="background:rgba(30,144,255,0.15);color:#1e90ff">NWS</div>
-    </div>
-    <div class="card-body" id="marine-body">
-      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-    </div>
-  </div>
-
-  <!-- Rip Current (US only) -->
-  <div class="card" id="card-rip" style="display:none">
-    <div class="card-header">
-      <div class="card-title"><span class="icon">⚠️</span> Rip Current Risk</div>
-      <div class="card-badge" id="rip-badge" style="background:rgba(0,200,83,0.15);color:#00c853">LOW</div>
-    </div>
-    <div class="card-body" id="rip-body">
-      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-    </div>
-  </div>
-
-</main>
-
-<!-- Onboarding / Spot Editor Overlay -->
+<!-- ── Spot editor / onboarding overlay ───────────────────────────────────── -->
 <div id="onboarding" class="onboarding-overlay">
   <div class="onboarding-inner">
     <div class="onboarding-logo">🌊</div>
@@ -141,42 +195,7 @@
   </div>
 </div>
 
-<!-- ── Map View Overlay (Windy-style) ──────────────────────────────────────── -->
-<div id="map-view">
-
-  <!-- Floating header bar -->
-  <div class="map-hdr">
-    <button class="map-back-btn" onclick="closeMapView()">←</button>
-    <span class="map-hdr-title">Wave Map</span>
-    <div class="map-layer-toggle">
-      <button id="map-btn-wind"  class="map-layer-btn active" onclick="switchMapLayer('wind')">Wind</button>
-      <button id="map-btn-swell" class="map-layer-btn"        onclick="switchMapLayer('swell')">Swell</button>
-    </div>
-    <span id="map-loading">Loading…</span>
-  </div>
-
-  <!-- Leaflet renders here -->
-  <div id="leaflet-map"></div>
-
-  <!-- Spot info bottom sheet (tap on marker) -->
-  <div id="map-spot-panel" class="map-spot-panel"></div>
-
-  <!-- Time scrubber -->
-  <div class="map-slider-bar">
-    <div class="map-slider-row">
-      <span id="map-time-label" class="map-time-lbl">Now</span>
-      <input type="range" id="map-time-slider" class="map-slider"
-             min="0" max="8" value="0" step="1"
-             oninput="updateMapForStep(+this.value)">
-      <span class="map-time-end">+24h</span>
-    </div>
-    <div class="map-tick-row">
-      <span>Now</span><span>+6h</span><span>+12h</span><span>+18h</span><span>+24h</span>
-    </div>
-  </div>
-
-</div>
-
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="app.js"></script>
 <script src="map.js"></script>
 </body>
