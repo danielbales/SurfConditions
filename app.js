@@ -547,18 +547,94 @@ async function loadSwell() {
     const dirStr   = degToCompass(wvDir);
     const swDirStr = degToCompass(swDir);
 
-    let forecastRows = '';
-    for (let i = idx + 1; i <= idx + 6 && i < hours.length; i++) {
-      const t = new Date(hours[i]);
-      const h = fmtTime(t).replace(':00', '');
-      forecastRows += `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)">
-          <span style="font-size:11px;color:var(--text-muted);width:60px">${h}</span>
-          <span style="font-size:13px;color:var(--text-primary)">${d.hourly.wave_height[i]?.toFixed(1) ?? '—'} ft</span>
-          <span style="font-size:11px;color:var(--text-muted)">${d.hourly.wave_period[i]?.toFixed(0) ?? '—'}s</span>
-          <span style="font-size:11px;color:var(--text-muted)">${degToCompass(d.hourly.wave_direction[i])}</span>
-        </div>`;
+    // ── Collect 48-hour forecast points ────────────────────────────────────
+    const pts = [];
+    for (let i = idx; i < hours.length && pts.length < 48; i++) {
+      pts.push({
+        t:    new Date(hours[i]),
+        wvHt: d.hourly.wave_height[i] ?? 0,
+        swHt: d.hourly.swell_wave_height[i] ?? 0,
+        per:  d.hourly.wave_period[i] ?? 0,
+        dir:  d.hourly.wave_direction[i] ?? 0,
+        swDir: d.hourly.swell_wave_direction[i] ?? 0,
+      });
     }
+
+    // ── SVG line graph ──────────────────────────────────────────────────────
+    const W = 320, H = 110, PL = 32, PR = 6, PT = 8, PB = 18;
+    const cW = W - PL - PR, cH = H - PT - PB;
+
+    const maxV = Math.max(...pts.map(p => p.wvHt), 1);
+    const tStart = pts[0].t.getTime();
+    const tEnd   = pts[pts.length - 1].t.getTime();
+    const tRange = tEnd - tStart;
+
+    const tx = t => PL + ((t.getTime() - tStart) / tRange) * cW;
+    const ty = v => PT + (1 - v / maxV) * cH;
+
+    // Wave height filled area + line
+    const wvPts  = pts.map(p => `${tx(p.t).toFixed(1)},${ty(p.wvHt).toFixed(1)}`).join(' ');
+    const wvArea = `M${tx(pts[0].t).toFixed(1)},${ty(0).toFixed(1)} `
+      + pts.map(p => `L${tx(p.t).toFixed(1)},${ty(p.wvHt).toFixed(1)}`).join(' ')
+      + ` L${tx(pts[pts.length-1].t).toFixed(1)},${ty(0).toFixed(1)} Z`;
+
+    // Swell height line
+    const swPts = pts.map(p => `${tx(p.t).toFixed(1)},${ty(p.swHt).toFixed(1)}`).join(' ');
+
+    // Y-axis labels
+    const yStep = maxV <= 4 ? 1 : maxV <= 8 ? 2 : 3;
+    let yLabels = '';
+    for (let v = 0; v <= maxV; v += yStep) {
+      yLabels += `<text x="${PL - 3}" y="${ty(v).toFixed(1)}" text-anchor="end" dominant-baseline="middle" fill="#607d8b" font-size="8" font-family="monospace">${v}</text>`;
+      yLabels += `<line x1="${PL}" y1="${ty(v).toFixed(1)}" x2="${W - PR}" y2="${ty(v).toFixed(1)}" stroke="#1a2e45" stroke-width="0.5"/>`;
+    }
+
+    // X-axis: ticks every 6 hours
+    let xLabels = '';
+    for (const p of pts) {
+      if (p.t.getHours() % 6 === 0) {
+        const x = tx(p.t).toFixed(1);
+        const label = p.t.getHours() === 0
+          ? p.t.toLocaleDateString([], { weekday: 'short' })
+          : p.t.getHours() + 'h';
+        xLabels += `<line x1="${x}" y1="${PT}" x2="${x}" y2="${PT + cH}" stroke="#1a2e45" stroke-width="0.5"/>`;
+        xLabels += `<text x="${x}" y="${H - 3}" text-anchor="middle" fill="#607d8b" font-size="8" font-family="monospace">${label}</text>`;
+      }
+    }
+
+    // "Now" marker
+    const nowX = Math.max(PL, Math.min(W - PR, tx(pts[0].t))).toFixed(1);
+    const nowLine = `<line x1="${nowX}" y1="${PT}" x2="${nowX}" y2="${PT + cH}" stroke="rgba(255,255,255,0.2)" stroke-width="1" stroke-dasharray="3,3"/>
+      <text x="${nowX}" y="${PT - 1}" text-anchor="middle" fill="rgba(255,255,255,0.3)" font-size="7" font-family="monospace">NOW</text>`;
+
+    const svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;margin-bottom:10px">
+      ${yLabels}${xLabels}${nowLine}
+      <path d="${wvArea}" fill="rgba(30,144,255,0.15)"/>
+      <polyline points="${wvPts}" fill="none" stroke="#1e90ff" stroke-width="1.5" stroke-linejoin="round"/>
+      <polyline points="${swPts}" fill="none" stroke="#00d4aa" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="4,2"/>
+    </svg>`;
+
+    const legend = `<div style="display:flex;gap:14px;margin-bottom:8px;font-size:10px;color:var(--text-muted);font-family:monospace">
+      <span><span style="display:inline-block;width:16px;height:2px;background:#1e90ff;vertical-align:middle;margin-right:4px"></span>Wave Ht (ft)</span>
+      <span><span style="display:inline-block;width:16px;height:1px;background:#00d4aa;vertical-align:middle;margin-right:4px;border-top:1.5px dashed #00d4aa"></span>Swell Ht (ft)</span>
+    </div>`;
+
+    // Direction table — every 3 hours, next 24 hours
+    const dirSamples = [];
+    for (let i = 0; i < pts.length && dirSamples.length < 8; i++) {
+      if (i === 0 || pts[i].t.getHours() % 3 === 0) dirSamples.push(pts[i]);
+    }
+    const dirRows = dirSamples.map(p => `
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1">
+        <span style="font-size:9px;color:var(--text-muted);font-family:monospace">${fmtTime(p.t).replace(':00','')}</span>
+        <span style="display:inline-block;transform:rotate(${p.dir + 180}deg);font-size:14px;line-height:1;color:#1e90ff">↑</span>
+        <span style="font-size:9px;font-family:monospace;color:var(--text-muted)">${degToCompass(p.dir)}</span>
+        <span style="font-size:10px;font-weight:bold;font-family:monospace;color:#1e90ff">${p.wvHt.toFixed(1)}</span>
+        <span style="font-size:9px;font-family:monospace;color:#00d4aa">${p.per.toFixed(0)}s</span>
+      </div>`).join('');
+
+    const dirTable = `<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;font-family:monospace">Swell Outlook · ft &amp; period</div>
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:8px">${dirRows}</div>`;
 
     const srcLink = ACTIVE.buoyId
       ? `<a href="https://www.ndbc.noaa.gov/station_page.php?station=${ACTIVE.buoyId}" target="_blank" rel="noopener" class="src-link">NDBC Buoy ${ACTIVE.buoyId} ↗</a>`
@@ -589,8 +665,7 @@ async function loadSwell() {
         </div>
       </div>
       <div class="divider"></div>
-      <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Next 6 Hours</div>
-      ${forecastRows}
+      ${legend}${svg}${dirTable}
       <div class="buoy-source" style="margin-top:6px">${srcLink}</div>
     `);
   } catch (e) {
