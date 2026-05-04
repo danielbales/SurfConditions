@@ -95,7 +95,7 @@ function saveSpots() {
 }
 
 function genId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  return crypto.randomUUID();
 }
 
 // Convenience accessors (used throughout API functions)
@@ -188,7 +188,8 @@ function formatSpotName(result) {
 function escapeHtml(str) {
   return String(str)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
 }
 
 // ─── Onboarding / Spot Editor ─────────────────────────────────────────────────
@@ -429,7 +430,7 @@ function loadingHTML() {
 }
 
 function errorHTML(msg) {
-  return `<div class="error-msg">⚠ ${msg}</div>`;
+  return `<div class="error-msg">⚠ ${escapeHtml(msg)}</div>`;
 }
 
 // ─── Moon Phase ───────────────────────────────────────────────────────────────
