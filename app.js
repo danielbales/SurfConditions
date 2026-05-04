@@ -95,7 +95,7 @@ function saveSpots() {
 }
 
 function genId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  return crypto.randomUUID();
 }
 
 // Convenience accessors (used throughout API functions)
@@ -188,7 +188,8 @@ function formatSpotName(result) {
 function escapeHtml(str) {
   return String(str)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
 }
 
 // ─── Onboarding / Spot Editor ─────────────────────────────────────────────────
@@ -429,7 +430,7 @@ function loadingHTML() {
 }
 
 function errorHTML(msg) {
-  return `<div class="error-msg">⚠ ${msg}</div>`;
+  return `<div class="error-msg">⚠ ${escapeHtml(msg)}</div>`;
 }
 
 // ─── Moon Phase ───────────────────────────────────────────────────────────────
@@ -683,11 +684,38 @@ function setupSwellChart(pts) {
   canvas.addEventListener('mouseleave', hideTip);
 }
 
+// ─── Swell breakdown (Surfline-style stacked rows) ────────────────────────────
+function swellBreakdownHTML(swells) {
+  const sorted = [...swells]
+    .filter(s => s.ht !== null && s.ht !== undefined && s.ht > 0)
+    .sort((a, b) => b.per - a.per); // longest period first (groundswell → windswell)
+
+  if (!sorted.length) return '';
+
+  const rows = sorted.map((s, i) => {
+    const rotDeg = (s.dir + 180) % 360;
+    return `
+      <div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+        <span style="font-size:${i === 0 ? '16px' : '14px'};font-weight:${i === 0 ? '700' : '500'};color:var(--text-primary);font-family:monospace;min-width:52px">${s.ht.toFixed(1)}ft</span>
+        <span style="font-size:${i === 0 ? '14px' : '13px'};color:var(--text-secondary);font-family:monospace;min-width:30px">${Math.round(s.per)}s</span>
+        <span style="display:inline-block;transform:rotate(${rotDeg}deg);font-size:14px;line-height:1;color:#1e90ff">↑</span>
+        <span style="font-size:13px;color:var(--text-secondary);font-family:monospace;min-width:36px">${degToCompass(s.dir)}</span>
+        <span style="font-size:12px;color:var(--text-muted);font-family:monospace">${Math.round(s.dir)}°</span>
+      </div>`;
+  }).join('');
+
+  return `
+    <div style="margin-bottom:12px">
+      <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;font-family:monospace">Swell</div>
+      ${rows}
+    </div>`;
+}
+
 // ─── 2. Open-Meteo Marine (Swell Forecast) ────────────────────────────────────
 async function loadSwell() {
   try {
     const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${LAT()}&longitude=${LNG()}`
-      + `&hourly=wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period,swell_wave_direction`
+      + `&hourly=wave_height,wave_period,wave_direction,wind_wave_height,wind_wave_direction,wind_wave_period,swell_wave_height,swell_wave_period,swell_wave_direction,swell_wave_height_2,swell_wave_period_2,swell_wave_direction_2,swell_wave_height_3,swell_wave_period_3,swell_wave_direction_3`
       + `&wind_speed_unit=kn&length_unit=imperial&timezone=auto&forecast_days=2&models=best_match`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -706,6 +734,15 @@ async function loadSwell() {
     const swHt  = d.hourly.swell_wave_height[idx];
     const swPer = d.hourly.swell_wave_period[idx];
     const swDir = d.hourly.swell_wave_direction[idx];
+    const sw2Ht  = d.hourly.swell_wave_height_2?.[idx] ?? null;
+    const sw2Per = d.hourly.swell_wave_period_2?.[idx] ?? null;
+    const sw2Dir = d.hourly.swell_wave_direction_2?.[idx] ?? null;
+    const sw3Ht  = d.hourly.swell_wave_height_3?.[idx] ?? null;
+    const sw3Per = d.hourly.swell_wave_period_3?.[idx] ?? null;
+    const sw3Dir = d.hourly.swell_wave_direction_3?.[idx] ?? null;
+    const wwHt  = d.hourly.wind_wave_height[idx];
+    const wwPer = d.hourly.wind_wave_period[idx];
+    const wwDir = d.hourly.wind_wave_direction[idx];
 
     const dirStr   = degToCompass(wvDir);
     const swDirStr = degToCompass(swDir);
@@ -762,17 +799,12 @@ async function loadSwell() {
           <div class="stat-label">${wvPer?.toFixed(0) ?? '—'}s period · from ${dirStr} (${wvDir}°)</div>
         </div>
       </div>
-      <div class="stats-grid">
-        <div class="stat-cell">
-          <div class="label">Swell Height</div>
-          <div class="value">${swHt?.toFixed(1) ?? '—'}<span style="font-size:12px;color:var(--text-muted)">ft</span></div>
-        </div>
-        <div class="stat-cell">
-          <div class="label">Swell Period</div>
-          <div class="value">${swPer?.toFixed(0) ?? '—'}<span style="font-size:12px;color:var(--text-muted)">s</span></div>
-          <div class="sub">from ${swDirStr}</div>
-        </div>
-      </div>
+      ${swellBreakdownHTML([
+        { ht: swHt,  per: swPer,  dir: swDir  },
+        { ht: sw2Ht, per: sw2Per, dir: sw2Dir },
+        { ht: sw3Ht, per: sw3Per, dir: sw3Dir },
+        { ht: wwHt,  per: wwPer,  dir: wwDir  },
+      ])}
       <div class="divider"></div>
       ${legend}
       <div style="position:relative;margin-bottom:10px">
@@ -1168,8 +1200,8 @@ async function loadMarineForecast() {
       }
       return `
         <div style="margin-bottom:10px">
-          <div style="font-size:11px;font-weight:600;color:var(--accent-blue);margin-bottom:3px">${title}</div>
-          <div class="forecast-text">${detail}</div>
+          <div style="font-size:11px;font-weight:600;color:var(--accent-blue);margin-bottom:3px">${escapeHtml(title)}</div>
+          <div class="forecast-text">${escapeHtml(detail)}</div>
         </div>`;
     }).join('');
 
@@ -1227,8 +1259,8 @@ async function loadRipCurrent() {
 
     setHTML('rip-body', `
       <div class="rip-indicator">
-        <div class="rip-level ${ripLevel}">${levelLabel}</div>
-        <div class="rip-desc">${ripText.substring(0, 200)}${ripText.length > 200 ? '…' : ''}</div>
+        <div class="rip-level ${ripLevel}">${escapeHtml(levelLabel)}</div>
+        <div class="rip-desc">${escapeHtml(ripText.substring(0, 200))}${ripText.length > 200 ? '…' : ''}</div>
       </div>
       <div class="buoy-source" style="margin-top:8px"><a href="https://www.weather.gov/mtr/rip" target="_blank" rel="noopener" class="src-link">NWS Rip Current Outlook ↗</a></div>
     `);
