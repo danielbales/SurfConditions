@@ -1199,8 +1199,8 @@ async function loadMarineForecast() {
       }
       return `
         <div style="margin-bottom:10px">
-          <div style="font-size:11px;font-weight:600;color:var(--accent-blue);margin-bottom:3px">${title}</div>
-          <div class="forecast-text">${detail}</div>
+          <div style="font-size:11px;font-weight:600;color:var(--accent-blue);margin-bottom:3px">${escapeHtml(title)}</div>
+          <div class="forecast-text">${escapeHtml(detail)}</div>
         </div>`;
     }).join('');
 
@@ -1258,8 +1258,8 @@ async function loadRipCurrent() {
 
     setHTML('rip-body', `
       <div class="rip-indicator">
-        <div class="rip-level ${ripLevel}">${levelLabel}</div>
-        <div class="rip-desc">${ripText.substring(0, 200)}${ripText.length > 200 ? '…' : ''}</div>
+        <div class="rip-level ${ripLevel}">${escapeHtml(levelLabel)}</div>
+        <div class="rip-desc">${escapeHtml(ripText.substring(0, 200))}${ripText.length > 200 ? '…' : ''}</div>
       </div>
       <div class="buoy-source" style="margin-top:8px"><a href="https://www.weather.gov/mtr/rip" target="_blank" rel="noopener" class="src-link">NWS Rip Current Outlook ↗</a></div>
     `);
