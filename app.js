@@ -715,7 +715,7 @@ function swellBreakdownHTML(swells) {
 async function loadSwell() {
   try {
     const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${LAT()}&longitude=${LNG()}`
-      + `&hourly=wave_height,wave_period,wave_direction,wind_wave_height,wind_wave_direction,wind_wave_period,swell_wave_height,swell_wave_period,swell_wave_direction,swell_wave_height_2,swell_wave_period_2,swell_wave_direction_2,swell_wave_height_3,swell_wave_period_3,swell_wave_direction_3`
+      + `&hourly=wave_height,wave_period,wave_direction,wind_wave_height,wind_wave_direction,wind_wave_period,swell_wave_height,swell_wave_period,swell_wave_direction`
       + `&wind_speed_unit=kn&length_unit=imperial&timezone=auto&forecast_days=2&models=best_match`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -734,12 +734,6 @@ async function loadSwell() {
     const swHt  = d.hourly.swell_wave_height[idx];
     const swPer = d.hourly.swell_wave_period[idx];
     const swDir = d.hourly.swell_wave_direction[idx];
-    const sw2Ht  = d.hourly.swell_wave_height_2?.[idx] ?? null;
-    const sw2Per = d.hourly.swell_wave_period_2?.[idx] ?? null;
-    const sw2Dir = d.hourly.swell_wave_direction_2?.[idx] ?? null;
-    const sw3Ht  = d.hourly.swell_wave_height_3?.[idx] ?? null;
-    const sw3Per = d.hourly.swell_wave_period_3?.[idx] ?? null;
-    const sw3Dir = d.hourly.swell_wave_direction_3?.[idx] ?? null;
     const wwHt  = d.hourly.wind_wave_height[idx];
     const wwPer = d.hourly.wind_wave_period[idx];
     const wwDir = d.hourly.wind_wave_direction[idx];
@@ -800,10 +794,8 @@ async function loadSwell() {
         </div>
       </div>
       ${swellBreakdownHTML([
-        { ht: swHt,  per: swPer,  dir: swDir  },
-        { ht: sw2Ht, per: sw2Per, dir: sw2Dir },
-        { ht: sw3Ht, per: sw3Per, dir: sw3Dir },
-        { ht: wwHt,  per: wwPer,  dir: wwDir  },
+        { ht: swHt, per: swPer, dir: swDir },
+        { ht: wwHt, per: wwPer, dir: wwDir },
       ])}
       <div class="divider"></div>
       ${legend}
