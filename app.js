@@ -72,6 +72,8 @@ async function toggleAlerts() {
 // ─── Spot Storage ─────────────────────────────────────────────────────────────
 // Spot shape: { id, name, lat, lng, isUS, tideStation, marineZone, cwfOffice, forecastUrl }
 
+const MAX_SPOTS = 5;
+
 let SAVED_SPOTS = [];
 let ACTIVE = null;
 let pendingSpots = []; // working copy while editor is open
@@ -81,6 +83,7 @@ const DEFAULT_SPOTS = [
   { id: 'asilomar', name: 'Asilomar',       lat: 36.6213, lng: -121.9427, beachFacing: 285, isUS: true, tideStation: '9413450', marineZone: 'PZZ535', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/91,51/forecast' },
   { id: 'bigsur',   name: 'Big Sur',        lat: 36.2344, lng: -121.8173, beachFacing: 270, isUS: true, tideStation: '9413450', marineZone: 'PZZ565', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/92,33/forecast' },
   { id: 'steamer',  name: 'Steamer Lane',   lat: 36.9516, lng: -122.0255, beachFacing: 210, isUS: true, tideStation: '9413450', marineZone: 'PZZ535', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/91,66/forecast' },
+  { id: 'mosslanding', name: 'Moss Landing', lat: 36.8035, lng: -121.7909, beachFacing: 265, isUS: true, tideStation: '9413450', marineZone: 'PZZ535', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/98,58/forecast' },
 ];
 
 // Beach facing for the active spot. Saved spots from before this feature (and
@@ -96,6 +99,11 @@ function loadSpots() {
     const raw = localStorage.getItem('surf_spots_v2');
     SAVED_SPOTS = raw ? JSON.parse(raw) : DEFAULT_SPOTS;
   } catch(e) { SAVED_SPOTS = DEFAULT_SPOTS; }
+  // One-time backfill: add Moss Landing to existing installs that predate it.
+  if (SAVED_SPOTS.length < MAX_SPOTS && !SAVED_SPOTS.find(s => s.id === 'mosslanding')) {
+    SAVED_SPOTS.push(DEFAULT_SPOTS.find(s => s.id === 'mosslanding'));
+    saveSpots();
+  }
 }
 
 function saveSpots() {
@@ -212,7 +220,7 @@ function openSpotEditor(editMode) {
   document.getElementById('onboarding-title').textContent = editMode ? 'Edit Spots' : "DB's Local";
   document.getElementById('onboarding-sub').textContent  = editMode
     ? 'Manage your local surf spots'
-    : 'Add up to 4 of your local surf spots';
+    : `Add up to ${MAX_SPOTS} of your local surf spots`;
   document.getElementById('start-btn').textContent = editMode ? 'Save Changes →' : 'Start Surfing →';
   document.getElementById('start-btn').disabled = pendingSpots.length === 0;
   document.getElementById('spot-search').value = '';
@@ -264,8 +272,8 @@ function onSearchInput(val) {
         return;
       }
       status.textContent = '';
-      if (pendingSpots.length >= 4) {
-        status.textContent = 'Maximum 4 spots reached';
+      if (pendingSpots.length >= MAX_SPOTS) {
+        status.textContent = `Maximum ${MAX_SPOTS} spots reached`;
         return;
       }
       results.innerHTML = data.map((r, i) => `
@@ -282,7 +290,7 @@ function onSearchInput(val) {
 
 async function addSpotFromResult(idx) {
   const result = _searchResults[idx];
-  if (!result || pendingSpots.length >= 4) return;
+  if (!result || pendingSpots.length >= MAX_SPOTS) return;
 
   const lat = parseFloat(result.lat);
   const lng = parseFloat(result.lon);
@@ -331,10 +339,10 @@ function renderEditorSpots() {
   }
 
   section.style.display = 'block';
-  const remaining = 4 - pendingSpots.length;
+  const remaining = MAX_SPOTS - pendingSpots.length;
   const hint = remaining > 0
     ? `${remaining} more spot${remaining !== 1 ? 's' : ''} can be added`
-    : 'Maximum 4 spots reached';
+    : `Maximum ${MAX_SPOTS} spots reached`;
 
   list.innerHTML = pendingSpots.map((s, i) => `
     <div class="added-spot-item">
