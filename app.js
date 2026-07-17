@@ -77,11 +77,19 @@ let ACTIVE = null;
 let pendingSpots = []; // working copy while editor is open
 
 const DEFAULT_SPOTS = [
-  { id: 'carmel',   name: 'Carmel Beach',  lat: 36.5535, lng: -121.9255, isUS: true, tideStation: '9413450', marineZone: 'PZZ535', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/91,48/forecast' },
-  { id: 'asilomar', name: 'Asilomar',       lat: 36.6213, lng: -121.9427, isUS: true, tideStation: '9413450', marineZone: 'PZZ535', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/91,51/forecast' },
-  { id: 'bigsur',   name: 'Big Sur',        lat: 36.2344, lng: -121.8173, isUS: true, tideStation: '9413450', marineZone: 'PZZ565', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/92,33/forecast' },
-  { id: 'steamer',  name: 'Steamer Lane',   lat: 36.9516, lng: -122.0255, isUS: true, tideStation: '9413450', marineZone: 'PZZ535', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/91,66/forecast' },
+  { id: 'carmel',   name: 'Carmel Beach',  lat: 36.5535, lng: -121.9255, beachFacing: 280, isUS: true, tideStation: '9413450', marineZone: 'PZZ535', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/91,48/forecast' },
+  { id: 'asilomar', name: 'Asilomar',       lat: 36.6213, lng: -121.9427, beachFacing: 285, isUS: true, tideStation: '9413450', marineZone: 'PZZ535', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/91,51/forecast' },
+  { id: 'bigsur',   name: 'Big Sur',        lat: 36.2344, lng: -121.8173, beachFacing: 270, isUS: true, tideStation: '9413450', marineZone: 'PZZ565', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/92,33/forecast' },
+  { id: 'steamer',  name: 'Steamer Lane',   lat: 36.9516, lng: -122.0255, beachFacing: 210, isUS: true, tideStation: '9413450', marineZone: 'PZZ535', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/91,66/forecast' },
 ];
+
+// Beach facing for the active spot. Saved spots from before this feature (and
+// custom spots) may lack beachFacing — backfill defaults by id, else null.
+function BEACH_FACING() {
+  if (typeof ACTIVE?.beachFacing === 'number') return ACTIVE.beachFacing;
+  const def = DEFAULT_SPOTS.find(s => s.id === ACTIVE?.id);
+  return typeof def?.beachFacing === 'number' ? def.beachFacing : null;
+}
 
 function loadSpots() {
   try {
@@ -711,6 +719,68 @@ function swellBreakdownHTML(swells) {
     </div>`;
 }
 
+// ─── Surf Quality Rating (ported from macOS app SurfQuality.evaluate) ─────────
+const QSTATE = { swell: null, windMph: null };
+
+function evaluateQuality(swell, windMph, facing) {
+  if (!swell || !(swell.ht > 0.3)) return { label: 'FLAT', score: 0 };
+
+  const ht = swell.ht;
+  const htS = ht < 0.5 ? 0 : ht < 1 ? 2 : ht < 2 ? 5 : ht < 4 ? 8 : ht < 8 ? 10 : ht < 12 ? 6 : 2;
+
+  const per = swell.per ?? 0;
+  const perS = per < 7 ? 0 : per < 10 ? 4 : per < 13 ? 7 : per < 16 ? 9 : 10;
+
+  const ws = windMph ?? 0;
+  const windS = ws < 5 ? 10 : ws < 10 ? 8 : ws < 15 ? 5 : ws < 20 ? 2 : 0;
+
+  let total;
+  if (facing == null) {
+    // No beach orientation known (custom spot) — score without direction
+    total = htS * 0.40 + perS * 0.40 + windS * 0.20;
+  } else {
+    let diff = Math.abs((swell.dir ?? 0) - facing);
+    if (diff > 180) diff = 360 - diff;
+    const dirS = diff < 20 ? 10 : diff < 45 ? 8 : diff < 70 ? 5 : diff < 90 ? 2 : 0;
+    total = htS * 0.30 + perS * 0.30 + dirS * 0.25 + windS * 0.15;
+  }
+
+  const label = total < 2 ? 'FLAT' : total < 4 ? 'POOR' : total < 6 ? 'FAIR' : total < 8 ? 'GOOD' : 'EPIC';
+  return { label, score: total };
+}
+
+const QUALITY_COLORS = {
+  FLAT: '#9e9e9e', POOR: '#ff5252', FAIR: '#ffb300', GOOD: '#00c853', EPIC: '#9b6dff',
+};
+
+function renderQuality() {
+  if (!QSTATE.swell) return; // wait for swell; wind is optional
+  const q = evaluateQuality(QSTATE.swell, QSTATE.windMph, BEACH_FACING());
+  const color = QUALITY_COLORS[q.label];
+
+  const badge = document.getElementById('quality-badge');
+  if (badge) {
+    badge.textContent = q.label;
+    badge.style.color = color;
+    badge.style.background = color + '26'; // ~15% alpha
+  }
+
+  const pct = Math.round(q.score * 10);
+  setHTML('quality-body', `
+    <div style="display:flex;align-items:center;gap:14px">
+      <span style="font-size:28px;font-weight:bold;font-family:monospace;color:${color}">${q.label}</span>
+      <span style="font-size:14px;color:var(--text-secondary);font-family:monospace">${q.score.toFixed(1)} / 10</span>
+    </div>
+    <div style="margin-top:8px;height:6px;border-radius:3px;background:rgba(155,155,155,0.15);overflow:hidden">
+      <div style="width:${pct}%;height:100%;border-radius:3px;background:${color}"></div>
+    </div>
+    <div style="margin-top:6px;font-size:10px;color:var(--text-muted);font-family:monospace">
+      swell ${QSTATE.swell.ht?.toFixed(1) ?? '—'} ft @ ${QSTATE.swell.per?.toFixed(0) ?? '—'}s
+      · wind ${QSTATE.windMph != null ? QSTATE.windMph.toFixed(0) + ' mph' : '—'}${BEACH_FACING() == null ? ' · direction ignored (custom spot)' : ''}
+    </div>
+  `);
+}
+
 // ─── 2. Open-Meteo Marine (Swell Forecast) ────────────────────────────────────
 async function loadSwell() {
   try {
@@ -740,6 +810,9 @@ async function loadSwell() {
 
     const dirStr   = degToCompass(wvDir);
     const swDirStr = degToCompass(swDir);
+
+    QSTATE.swell = { ht: swHt, per: swPer, dir: swDir };
+    renderQuality();
 
     // ── Collect 48-hour forecast points ────────────────────────────────────
     const pts = [];
@@ -831,6 +904,11 @@ async function loadWeather() {
 
     renderWind(d.hourly.wind_speed_10m[idx], d.hourly.wind_gusts_10m[idx], d.hourly.wind_direction_10m[idx]);
     renderWindForecast(d.hourly, idx);
+
+    // Quality rating expects mph; wind here is in knots
+    const spdKn = d.hourly.wind_speed_10m[idx];
+    QSTATE.windMph = spdKn != null ? spdKn * 1.15078 : null;
+    renderQuality();
   } catch (e) {
     setHTML('wind-body', errorHTML('Wind data unavailable: ' + e.message));
     setHTML('wind-forecast-body', errorHTML('Wind forecast unavailable'));
@@ -1279,6 +1357,9 @@ async function refreshAll() {
   setHTML('lastUpdated', 'Updating…');
 
   // Reset visible card bodies to loading state
+  QSTATE.swell = null;
+  QSTATE.windMph = null;
+  setHTML('quality-body',       loadingHTML());
   setHTML('buoy-body',          loadingHTML());
   setHTML('swell-body',         loadingHTML());
   setHTML('wind-body',          loadingHTML());
