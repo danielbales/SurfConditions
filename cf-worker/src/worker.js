@@ -38,6 +38,17 @@ const SPOTS = {
       return `${marine.swellFt}ft @ ${marine.swellPeriod}s · Wind ${dirLabel(wind.dir)} ${wind.speed}mph`;
     },
   },
+  mosslanding: {
+    name: 'Moss Landing',
+    lat: 36.8035, lng: -121.7909,
+    noaaStation: null,
+    check(marine, wind) {
+      if (marine.swellFt < 4.0)              return null;
+      if (marine.swellPeriod < 10)           return null; // groundswell only — closes out on windswell
+      if (!inRange(wind.dir, 22.5, 157.5))   return null; // NE through SE (offshore-ish)
+      return `${marine.swellFt}ft @ ${marine.swellPeriod}s · Wind ${dirLabel(wind.dir)} ${wind.speed}mph`;
+    },
+  },
 };
 
 // ─── Direction helpers ────────────────────────────────────────────────────────
