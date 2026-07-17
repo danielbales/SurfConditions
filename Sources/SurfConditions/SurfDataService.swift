@@ -22,6 +22,7 @@ class SurfDataService: ObservableObject {
     // New properties
     @Published var selectedLocation: SurfLocation = SurfLocation.all[0]
     @Published var hourlyForecast: [HourlyDataPoint] = []
+    @Published var windForecast: [WindForecastPoint] = []
     @Published var surfQuality: SurfQuality = SurfQuality(label: "--", score: 0)
 
     private var lat: Double { selectedLocation.lat }
@@ -40,16 +41,17 @@ class SurfDataService: ObservableObject {
         // Compute moon phase locally (no network needed)
         moonPhase = .current()
 
-        async let marine   = fetchMarine()
-        async let weather  = fetchWeather()
-        async let tides    = fetchTides()
-        async let buoy     = fetchBuoy()
-        async let sun      = fetchSunrise()
-        async let forecast = fetchMarineForecast()
-        async let alerts   = fetchAlerts()
-        async let hourly   = fetchHourlyMarine()
+        async let marine    = fetchMarine()
+        async let weather   = fetchWeather()
+        async let tides     = fetchTides()
+        async let buoy      = fetchBuoy()
+        async let sun       = fetchSunrise()
+        async let forecast  = fetchMarineForecast()
+        async let alerts    = fetchAlerts()
+        async let hourly    = fetchHourlyMarine()
+        async let windHrly  = fetchHourlyWind()
 
-        let (m, w, t, b, s, f, a, h) = await (marine, weather, tides, buoy, sun, forecast, alerts, hourly)
+        let (m, w, t, b, s, f, a, h, wh) = await (marine, weather, tides, buoy, sun, forecast, alerts, hourly, windHrly)
 
         swellData      = m
         windData       = w?.wind
@@ -59,6 +61,7 @@ class SurfDataService: ObservableObject {
         sunData        = s
         marineForecast = f ?? []
         hourlyForecast = h ?? []
+        windForecast   = wh ?? []
         parseRipCurrentRisk(from: a)
 
         surfQuality = SurfQuality.evaluate(swell: swellData, wind: windData, beachFacing: selectedLocation.beachFacing)
@@ -72,7 +75,7 @@ class SurfDataService: ObservableObject {
     // MARK: - Marine (wave/swell)
 
     private func fetchMarine() async -> SwellData? {
-        let vars = "wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_direction,swell_wave_period"
+        let vars = "wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_direction,swell_wave_period,wind_wave_height,wind_wave_direction,wind_wave_period"
         let urlStr = "https://marine-api.open-meteo.com/v1/marine?latitude=\(lat)&longitude=\(lon)&current=\(vars)&timezone=America/Los_Angeles"
         guard let url = URL(string: urlStr) else { return nil }
 
@@ -82,13 +85,27 @@ class SurfDataService: ObservableObject {
             let c = resp.current
             let mToFt = 3.28084
 
+            var components: [SwellComponent] = []
+            let rawComponents: [(Double?, Double?, Double?)] = [
+                (c.swellWaveHeight, c.swellWavePeriod, c.swellWaveDirection),
+                (c.windWaveHeight,  c.windWavePeriod,  c.windWaveDirection),
+            ]
+            for (ht, per, dir) in rawComponents {
+                let h = (ht ?? 0) * mToFt
+                let p = per ?? 0
+                let d = dir ?? 0
+                if h > 0.1 {
+                    components.append(SwellComponent(height: h, period: p, direction: d))
+                }
+            }
+            // Sort longest period first (groundswell → windswell)
+            components.sort { $0.period > $1.period }
+
             return SwellData(
-                waveHeight:    (c.waveHeight    ?? 0) * mToFt,
-                wavePeriod:     c.wavePeriod    ?? 0,
-                waveDirection:  c.waveDirection ?? 0,
-                swellHeight:   (c.swellWaveHeight    ?? 0) * mToFt,
-                swellPeriod:    c.swellWavePeriod    ?? 0,
-                swellDirection: c.swellWaveDirection ?? 0
+                waveHeight:       (c.waveHeight    ?? 0) * mToFt,
+                wavePeriod:        c.wavePeriod    ?? 0,
+                waveDirection:     c.waveDirection ?? 0,
+                swellComponents:   components
             )
         } catch {
             errorMessage = "Wave data unavailable"
@@ -397,6 +414,37 @@ class SurfDataService: ObservableObject {
         } catch { return nil }
     }
 
+    // MARK: - Hourly Wind Forecast
+
+    private func fetchHourlyWind() async -> [WindForecastPoint]? {
+        let vars = "wind_speed_10m,wind_gusts_10m,wind_direction_10m"
+        let urlStr = "https://api.open-meteo.com/v1/forecast?latitude=\(lat)&longitude=\(lon)&hourly=\(vars)&wind_speed_unit=mph&forecast_days=3&timezone=America/Los_Angeles"
+        guard let url = URL(string: urlStr) else { return nil }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let resp = try JSONDecoder().decode(WeatherHourlyResponse.self, from: data)
+            let h = resp.hourly
+            let fmt = DateFormatter()
+            fmt.dateFormat = "yyyy-MM-dd'T'HH:mm"
+            fmt.timeZone = TimeZone(identifier: "America/Los_Angeles")
+            let now = Date()
+            var points: [WindForecastPoint] = []
+            for i in 0..<h.time.count {
+                guard let date = fmt.date(from: h.time[i]),
+                      date >= now,
+                      date <= now.addingTimeInterval(48 * 3600)
+                else { continue }
+                points.append(WindForecastPoint(
+                    time:      date,
+                    speedMph:  h.windSpeed10m[i]     ?? 0,
+                    gustsMph:  h.windGusts10m[i]     ?? 0,
+                    direction: h.windDirection10m[i] ?? 0
+                ))
+            }
+            return points
+        } catch { return nil }
+    }
+
     // MARK: - Cache
 
     func saveCache() {
@@ -410,6 +458,7 @@ class SurfDataService: ObservableObject {
             uvIndex: uvIndex,
             sunData: sunData,
             hourlyForecast: hourlyForecast,
+            windForecast: windForecast,
             marineForecast: marineForecast,
             ripCurrentRisk: ripCurrentRisk,
             ripCurrentDetail: ripCurrentDetail
@@ -430,6 +479,7 @@ class SurfDataService: ObservableObject {
         uvIndex          = cache.uvIndex
         sunData          = cache.sunData
         hourlyForecast   = cache.hourlyForecast
+        windForecast     = cache.windForecast
         marineForecast   = cache.marineForecast
         ripCurrentRisk   = cache.ripCurrentRisk
         ripCurrentDetail = cache.ripCurrentDetail

@@ -3,3 +3,5 @@ SurfConditions.app/
 .claude/
 *.o
 *.d
+.env
+surf_alert.log

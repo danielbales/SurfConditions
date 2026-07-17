@@ -137,6 +137,55 @@ struct SwellDirectionView: View {
     }
 }
 
+// MARK: - Swell Component Row (Surfline-style)
+
+struct SwellComponentRow: View {
+    let component: SwellComponent
+    let isPrimary: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(String(format: "%.1f ft", component.height))
+                .font(.system(size: isPrimary ? 16 : 14, weight: isPrimary ? .bold : .medium, design: .monospaced))
+                .foregroundColor(.oceanAccent)
+                .frame(minWidth: 56, alignment: .leading)
+
+            Text(String(format: "%.0fs", component.period))
+                .font(.system(size: isPrimary ? 14 : 13, design: .monospaced))
+                .foregroundColor(.secondary)
+                .frame(minWidth: 34, alignment: .leading)
+
+            // Direction arrow rotated to show where swell is heading (from source = +180)
+            Image(systemName: "arrow.up")
+                .font(.system(size: 13))
+                .rotationEffect(.degrees(component.direction + 180))
+                .foregroundColor(.oceanAccent)
+
+            Text(compassDirection(component.direction))
+                .font(.system(size: 13, design: .monospaced))
+                .foregroundColor(.secondary)
+
+            Text("\(Int(component.direction))°")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.secondary.opacity(0.7))
+
+            // Long-period badge
+            if component.period >= 14 {
+                Text("LP")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundColor(.orange)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(Color.orange.opacity(0.15))
+                    .cornerRadius(3)
+            }
+
+            Spacer()
+        }
+        .padding(.vertical, 4)
+    }
+}
+
 // MARK: - Swell Card
 
 struct SwellCard: View {
@@ -158,11 +207,22 @@ struct SwellCard: View {
 
                     Divider().background(Color.oceanBorder).padding(.vertical, 4)
 
-                    SectionLabel(text: "Primary Swell")
+                    SectionLabel(text: "SWELL")
 
-                    DataRow(label: "Height",    value: String(format: "%.1f ft", d.swellHeight))
-                    DataRow(label: "Period",    value: String(format: "%.0f sec", d.swellPeriod))
-                    DataRow(label: "Direction", value: "\(compassDirection(d.swellDirection))  \(Int(d.swellDirection))°")
+                    if d.swellComponents.isEmpty {
+                        Text("No swell data")
+                            .font(.system(size: 13, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    } else {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(Array(d.swellComponents.enumerated()), id: \.offset) { idx, component in
+                                SwellComponentRow(component: component, isPrimary: idx == 0)
+                                if idx < d.swellComponents.count - 1 {
+                                    Divider().background(Color.oceanBorder.opacity(0.4))
+                                }
+                            }
+                        }
+                    }
 
                     Divider().background(Color.oceanBorder).padding(.vertical, 4)
                     HStack {
@@ -797,6 +857,142 @@ struct HourlyForecastCard: View {
     }
 }
 
+// MARK: - Wind Forecast Card
+
+struct WindSeriesPoint: Identifiable {
+    let id = UUID()
+    let time: Date
+    let value: Double
+    let series: String
+}
+
+struct WindForecastCard: View {
+    let points: [WindForecastPoint]
+
+    var seriesData: [WindSeriesPoint] {
+        points.flatMap { pt in [
+            WindSeriesPoint(time: pt.time, value: pt.speedMph, series: "Wind Speed"),
+            WindSeriesPoint(time: pt.time, value: pt.gustsMph, series: "Gusts"),
+        ]}
+    }
+
+    // Sample every 3rd point for direction arrows so they don't overlap
+    var directionSamples: [WindForecastPoint] {
+        stride(from: 0, to: points.count, by: 3).compactMap { points[safe: $0] }
+    }
+
+    var body: some View {
+        CardContainer(title: "48-HOUR WIND FORECAST", icon: "wind", accent: .oceanGreen) {
+            if points.isEmpty {
+                NoDataView()
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    // Legend
+                    HStack(spacing: 16) {
+                        ForEach([
+                            ("Wind Speed", Color.oceanGreen),
+                            ("Gusts",      Color.oceanYellow),
+                        ], id: \.0) { label, color in
+                            HStack(spacing: 5) {
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(color)
+                                    .frame(width: 20, height: 3)
+                                Text(label)
+                                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                    .foregroundColor(.oceanSubtext)
+                            }
+                        }
+                    }
+
+                    Chart(seriesData) { pt in
+                        LineMark(
+                            x: .value("Time",  pt.time),
+                            y: .value("Speed", pt.value)
+                        )
+                        .foregroundStyle(by: .value("Series", pt.series))
+                        .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
+                        .interpolationMethod(.catmullRom)
+
+                        RuleMark(x: .value("Now", Date()))
+                            .foregroundStyle(Color.oceanText.opacity(0.2))
+                            .lineStyle(StrokeStyle(dash: [4, 4]))
+                            .annotation(position: .top, alignment: .center) {
+                                Text("NOW")
+                                    .font(.system(size: 8, design: .monospaced))
+                                    .foregroundColor(Color.oceanText.opacity(0.4))
+                            }
+                    }
+                    .chartForegroundStyleScale([
+                        "Wind Speed": Color.oceanGreen,
+                        "Gusts":      Color.oceanYellow,
+                    ])
+                    .chartLegend(.hidden)
+                    .chartXAxis {
+                        AxisMarks(values: .automatic(desiredCount: 8)) { val in
+                            AxisGridLine().foregroundStyle(Color.oceanBorder.opacity(0.3))
+                            AxisValueLabel(format: .dateTime.hour(.defaultDigits(amPM: .abbreviated)), centered: true)
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundStyle(Color.oceanSubtext)
+                        }
+                    }
+                    .chartYAxis {
+                        AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { val in
+                            AxisGridLine().foregroundStyle(Color.oceanBorder.opacity(0.3))
+                            AxisValueLabel {
+                                if let v = val.as(Double.self) {
+                                    Text(String(format: "%.0f mph", v))
+                                        .font(.system(size: 9, design: .monospaced))
+                                        .foregroundColor(.oceanSubtext)
+                                }
+                            }
+                        }
+                    }
+                    .frame(height: 130)
+
+                    // Direction summary table — next 8 hours in 3-hour steps
+                    Divider().background(Color.oceanBorder)
+
+                    SectionLabel(text: "Direction Outlook")
+
+                    HStack(spacing: 0) {
+                        ForEach(directionSamples.prefix(8)) { pt in
+                            VStack(spacing: 3) {
+                                Text(formatLocalTime(pt.time))
+                                    .font(.system(size: 8, design: .monospaced))
+                                    .foregroundColor(.oceanSubtext)
+                                Image(systemName: "arrow.up")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(.oceanGreen)
+                                    .rotationEffect(.degrees(pt.direction + 180))
+                                Text(compassDirection(pt.direction))
+                                    .font(.system(size: 8, weight: .medium, design: .monospaced))
+                                    .foregroundColor(.oceanText)
+                                Text(String(format: "%.0f", pt.speedMph))
+                                    .font(.system(size: 8, design: .monospaced))
+                                    .foregroundColor(windSpeedColor(pt.speedMph))
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    func windSpeedColor(_ mph: Double) -> Color {
+        if mph < 10 { return .oceanGreen }
+        if mph < 20 { return .oceanAccent }
+        if mph < 30 { return .oceanYellow }
+        return .oceanRed
+    }
+}
+
+extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
+    }
+}
+
 // MARK: - Main View
 
 struct ContentView: View {
@@ -859,8 +1055,12 @@ struct ContentView: View {
                             .padding(.horizontal, 20)
                             .padding(.bottom, 14)
 
-                            // Row 4: 48-hour forecast
+                            // Row 4: 48-hour swell forecast
                             HourlyForecastCard(points: service.hourlyForecast)
+                                .padding(.horizontal, 20)
+
+                            // Row 5: 48-hour wind forecast
+                            WindForecastCard(points: service.windForecast)
                                 .padding(.horizontal, 20)
                                 .padding(.bottom, 14)
                         }

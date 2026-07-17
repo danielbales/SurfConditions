@@ -14,6 +14,9 @@ struct MarineCurrent: Codable {
     let swellWaveHeight: Double?
     let swellWaveDirection: Double?
     let swellWavePeriod: Double?
+    let windWaveHeight: Double?
+    let windWaveDirection: Double?
+    let windWavePeriod: Double?
 
     enum CodingKeys: String, CodingKey {
         case time
@@ -23,6 +26,9 @@ struct MarineCurrent: Codable {
         case swellWaveHeight = "swell_wave_height"
         case swellWaveDirection = "swell_wave_direction"
         case swellWavePeriod = "swell_wave_period"
+        case windWaveHeight = "wind_wave_height"
+        case windWaveDirection = "wind_wave_direction"
+        case windWavePeriod = "wind_wave_period"
     }
 }
 
@@ -51,6 +57,26 @@ struct MarineHourlyData: Codable {
 
 struct WeatherAPIResponse: Codable {
     let current: WeatherCurrent
+}
+
+// MARK: - Open-Meteo Hourly Weather API (wind forecast)
+
+struct WeatherHourlyResponse: Codable {
+    let hourly: WeatherHourlyData
+}
+
+struct WeatherHourlyData: Codable {
+    let time: [String]
+    let windSpeed10m: [Double?]
+    let windGusts10m: [Double?]
+    let windDirection10m: [Double?]
+
+    enum CodingKeys: String, CodingKey {
+        case time
+        case windSpeed10m    = "wind_speed_10m"
+        case windGusts10m    = "wind_gusts_10m"
+        case windDirection10m = "wind_direction_10m"
+    }
 }
 
 struct WeatherCurrent: Codable {
@@ -116,13 +142,23 @@ struct NOAATidePrediction: Codable, Identifiable {
 
 // MARK: - Domain Models
 
+struct SwellComponent: Codable, Identifiable {
+    let height: Double    // feet
+    let period: Double    // seconds
+    let direction: Double // degrees
+    var id: String { "\(direction)-\(period)" }
+}
+
 struct SwellData: Codable {
-    let waveHeight: Double   // feet
-    let wavePeriod: Double   // seconds
+    let waveHeight: Double    // feet (combined sea)
+    let wavePeriod: Double    // seconds
     let waveDirection: Double // degrees
-    let swellHeight: Double  // feet
-    let swellPeriod: Double  // seconds
-    let swellDirection: Double // degrees
+    let swellComponents: [SwellComponent] // sorted longest period first
+
+    // Backwards compat for SurfQuality.evaluate
+    var swellHeight: Double    { swellComponents.first?.height ?? 0 }
+    var swellPeriod: Double    { swellComponents.first?.period ?? 0 }
+    var swellDirection: Double { swellComponents.first?.direction ?? 0 }
 }
 
 struct WindData: Codable {
@@ -292,6 +328,16 @@ struct MoonPhaseData: Codable {
     }
 }
 
+// MARK: - Wind Forecast Point
+
+struct WindForecastPoint: Identifiable, Codable {
+    let time: Date
+    let speedMph: Double
+    let gustsMph: Double
+    let direction: Double
+    var id: TimeInterval { time.timeIntervalSince1970 }
+}
+
 // MARK: - Hourly Data Point
 
 struct HourlyDataPoint: Identifiable, Codable {
@@ -377,6 +423,7 @@ struct SurfCache: Codable {
     let uvIndex: Double?
     let sunData: SunData?
     let hourlyForecast: [HourlyDataPoint]
+    let windForecast: [WindForecastPoint]
     let marineForecast: [NWSForecastPeriod]
     let ripCurrentRisk: String
     let ripCurrentDetail: String?

@@ -12,9 +12,19 @@ import time
 import requests
 from datetime import datetime, date
 
+# ─── Load .env (if present) ────────────────────────────────────────────────────
+_env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+if os.path.exists(_env_path):
+    with open(_env_path) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith('#') and '=' in _line:
+                _k, _v = _line.split('=', 1)
+                os.environ.setdefault(_k.strip(), _v.strip())
+
 # ─── Config ────────────────────────────────────────────────────────────────────
-WORKER_URL   = 'https://surf-alerts.dbales1210.workers.dev'
-NOTIFY_SECRET = 'a9d4c5d77abf4bef03a86dac7298372983dee339ce48a9496a6f034dc6f4f72b'
+WORKER_URL    = 'https://surf-alerts.dbales1210.workers.dev'
+NOTIFY_SECRET = os.environ.get('NOTIFY_SECRET') or exit('NOTIFY_SECRET not set — add it to ~/SurfConditions/.env')
 COOLDOWN_SEC = 4 * 60 * 60   # 4 hours between repeat alerts per spot
 STATE_FILE   = os.path.expanduser('~/.surf_alert_state.json')
 
