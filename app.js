@@ -217,7 +217,7 @@ function openSpotEditor(editMode) {
   _isEditMode = !!editMode;
   pendingSpots = [...SAVED_SPOTS];
 
-  document.getElementById('onboarding-title').textContent = editMode ? 'Edit Spots' : "DB's Local";
+  document.getElementById('onboarding-title').textContent = editMode ? 'Edit Spots' : "Waves";
   document.getElementById('onboarding-sub').textContent  = editMode
     ? 'Manage your local surf spots'
     : `Add up to ${MAX_SPOTS} of your local surf spots`;
@@ -398,15 +398,12 @@ function updateCardVisibility() {
   if (!ACTIVE) return;
   const hasTides  = ACTIVE.isUS && !!ACTIVE.tideStation;
   const hasMarine = ACTIVE.isUS && !!ACTIVE.marineZone && !!ACTIVE.cwfOffice;
-  const hasRip    = ACTIVE.isUS;
 
   const tidesCard  = document.getElementById('card-tides');
   const marineCard = document.getElementById('card-marine');
-  const ripCard    = document.getElementById('card-rip');
 
   if (tidesCard)  tidesCard.style.display  = hasTides  ? '' : 'none';
   if (marineCard) marineCard.style.display = hasMarine ? '' : 'none';
-  if (ripCard)    ripCard.style.display    = hasRip    ? '' : 'none';
 
   if (hasTides) {
     const tidesTitle = document.querySelector('#card-tides .card-title');
@@ -1853,7 +1850,6 @@ async function loadNWS() {
   if (!ACTIVE?.isUS) return;
   const tasks = [];
   if (ACTIVE.marineZone && ACTIVE.cwfOffice) tasks.push(loadMarineForecast());
-  tasks.push(loadRipCurrent());
   await Promise.allSettled(tasks);
 }
 
@@ -1881,7 +1877,6 @@ async function refreshAll() {
   setHTML('uv-body',            loadingHTML());
   if (ACTIVE.isUS && ACTIVE.tideStation) setHTML('tides-body',  loadingHTML());
   if (ACTIVE.isUS && ACTIVE.marineZone)  setHTML('marine-body', loadingHTML());
-  if (ACTIVE.isUS)                       setHTML('rip-body',    loadingHTML());
 
   await Promise.allSettled([
     loadBuoy(),

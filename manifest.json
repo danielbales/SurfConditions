@@ -1,6 +1,6 @@
 {
-  "name": "Surf Conditions",
-  "short_name": "Surf",
+  "name": "Waves",
+  "short_name": "Waves",
   "description": "Real-time surf conditions for Monterey Bay",
   "start_url": "/SurfConditions/",
   "scope": "/SurfConditions/",
