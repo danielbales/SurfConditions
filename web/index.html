@@ -8,8 +8,8 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Surf">
-  <title>DB's Local</title>
+  <meta name="apple-mobile-web-app-title" content="Waves">
+  <title>Waves</title>
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -22,7 +22,7 @@
 
 <header>
   <div class="header-left">
-    <h1>🌊 DB's Local</h1>
+    <h1>🌊 Waves</h1>
     <div class="subtitle" id="location-subtitle"></div>
   </div>
   <div class="header-right">
@@ -48,17 +48,6 @@
       <div class="card-badge" id="quality-badge" style="background:rgba(155,155,155,0.15);color:var(--text-muted)">--</div>
     </div>
     <div class="card-body" id="quality-body">
-      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-    </div>
-  </div>
-
-  <!-- Best Time to Surf -->
-  <div class="card" id="card-best-time">
-    <div class="card-header">
-      <div class="card-title"><span class="icon">⏰</span> Best Time to Surf</div>
-      <div class="card-badge" style="background:rgba(155,109,255,0.15);color:#9b6dff">48H</div>
-    </div>
-    <div class="card-body" id="best-time-body">
       <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
     </div>
   </div>
@@ -107,6 +96,28 @@
     </div>
   </div>
 
+  <!-- Tides (US only — hidden until US spot loaded) -->
+  <div class="card" id="card-tides" style="display:none">
+    <div class="card-header">
+      <div class="card-title"><span class="icon">🌊</span> Tides</div>
+      <div class="card-badge" style="background:rgba(155,109,255,0.15);color:#9b6dff">NOAA</div>
+    </div>
+    <div class="card-body" id="tides-body">
+      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+    </div>
+  </div>
+
+  <!-- Best Time to Surf -->
+  <div class="card" id="card-best-time">
+    <div class="card-header">
+      <div class="card-title"><span class="icon">⏰</span> Best Time to Surf</div>
+      <div class="card-badge" style="background:rgba(155,109,255,0.15);color:#9b6dff">48H</div>
+    </div>
+    <div class="card-body" id="best-time-body">
+      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+    </div>
+  </div>
+
   <!-- Sun & Moon -->
   <div class="card" id="card-sun-moon">
     <div class="card-header">
@@ -128,17 +139,6 @@
     </div>
   </div>
 
-  <!-- Tides (US only — hidden until US spot loaded) -->
-  <div class="card" id="card-tides" style="display:none">
-    <div class="card-header">
-      <div class="card-title"><span class="icon">🌊</span> Tides</div>
-      <div class="card-badge" style="background:rgba(155,109,255,0.15);color:#9b6dff">NOAA</div>
-    </div>
-    <div class="card-body" id="tides-body">
-      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-    </div>
-  </div>
-
   <!-- Marine Forecast (US only) -->
   <div class="card" id="card-marine" style="display:none">
     <div class="card-header">
@@ -150,24 +150,13 @@
     </div>
   </div>
 
-  <!-- Rip Current (US only) -->
-  <div class="card" id="card-rip" style="display:none">
-    <div class="card-header">
-      <div class="card-title"><span class="icon">⚠️</span> Rip Current Risk</div>
-      <div class="card-badge" id="rip-badge" style="background:rgba(0,200,83,0.15);color:#00c853">LOW</div>
-    </div>
-    <div class="card-body" id="rip-body">
-      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-    </div>
-  </div>
-
 </main>
 
 <!-- Onboarding / Spot Editor Overlay -->
 <div id="onboarding" class="onboarding-overlay">
   <div class="onboarding-inner">
     <div class="onboarding-logo">🌊</div>
-    <div class="onboarding-title" id="onboarding-title">DB's Local</div>
+    <div class="onboarding-title" id="onboarding-title">Waves</div>
     <div class="onboarding-sub" id="onboarding-sub">Add up to 5 of your local surf spots</div>
 
     <div class="search-wrap">
