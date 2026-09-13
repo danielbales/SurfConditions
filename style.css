@@ -126,11 +126,28 @@ header {
 /* Main layout */
 main {
   padding: 12px;
-  max-width: 480px;
+  max-width: 600px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+@media (min-width: 768px) {
+  main {
+    max-width: 900px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  #card-quality, #card-best-time, #card-swell, #card-wind-forecast { grid-column: 1 / -1; }
+}
+
+@media (min-width: 1200px) {
+  main {
+    max-width: 1200px;
+    grid-template-columns: 1fr 1fr 1fr;
+  }
 }
 
 /* Cards */
@@ -550,4 +567,189 @@ main {
 @media (max-width: 360px) {
   .stat-value { font-size: 30px; }
   .wind-info .speed { font-size: 26px; }
+}
+
+/* ─── Icon buttons (header) ──────────────────────────────────────────────── */
+.icon-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 8px;
+  transition: background 0.15s;
+  line-height: 1;
+}
+.icon-btn:active { background: var(--bg-card2); }
+
+/* ─── Pull-to-refresh ────────────────────────────────────────────────────── */
+.pull-indicator {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  background: var(--bg-card2);
+  color: var(--text-secondary);
+  font-size: 12px;
+  opacity: 0;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+  pointer-events: none;
+}
+.pull-arrow {
+  display: inline-block;
+  font-size: 16px;
+  transition: transform 0.2s ease;
+}
+
+/* ─── Offline indicator ──────────────────────────────────────────────────── */
+.offline-indicator {
+  text-align: center;
+  font-size: 11px;
+  color: var(--wind-fresh);
+  background: rgba(255,152,0,0.1);
+  padding: 6px;
+  border-bottom: 1px solid rgba(255,152,0,0.2);
+}
+
+/* ─── Spot editor enhancements ───────────────────────────────────────────── */
+.spot-reorder-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: auto;
+  margin-right: 6px;
+}
+.reorder-btn {
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 10px;
+  width: 22px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+.reorder-btn:active { background: var(--border); }
+
+.facing-picker {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  padding-left: 28px;
+}
+.facing-btn {
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text-muted);
+  font-size: 10px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.facing-btn.active {
+  background: var(--accent-teal);
+  border-color: var(--accent-teal);
+  color: #0a1628;
+  font-weight: 700;
+}
+.facing-btn:active { opacity: 0.7; }
+.facing-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  padding-left: 28px;
+  margin-top: 4px;
+}
+
+/* ─── Wind chart interaction ─────────────────────────────────────────────── */
+.wind-chart-container {
+  position: relative;
+  touch-action: none;
+  cursor: crosshair;
+}
+.wind-crosshair {
+  display: none;
+  position: absolute;
+  top: 0;
+  bottom: 20px;
+  width: 1px;
+  background: rgba(255,255,255,0.45);
+  pointer-events: none;
+}
+.wind-chart-tip {
+  display: none;
+  position: absolute;
+  top: 6px;
+  left: 0;
+  background: rgba(10,22,40,0.92);
+  border: 1px solid rgba(0,200,83,0.4);
+  border-radius: 6px;
+  padding: 6px 9px;
+  pointer-events: none;
+  min-width: 130px;
+  max-width: 170px;
+  z-index: 10;
+}
+
+/* ─── Tide toggle ────────────────────────────────────────────────────────── */
+.tide-toggle {
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text-muted);
+  font-size: 10px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.tide-toggle.active {
+  background: var(--accent-purple);
+  border-color: var(--accent-purple);
+  color: #fff;
+}
+.tide-toggle:active { opacity: 0.7; }
+
+/* ─── Alignment badge ────────────────────────────────────────────────────── */
+.alignment-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-card2);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}
+.alignment-compass {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.alignment-compass .swell-arrow {
+  position: absolute;
+  font-size: 16px;
+  color: #1e90ff;
+  display: inline-block;
+}
+.alignment-compass .beach-line {
+  position: absolute;
+  font-size: 10px;
+  display: inline-block;
+  opacity: 0.6;
 }
