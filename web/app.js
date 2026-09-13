@@ -346,9 +346,9 @@ function renderEditorSpots() {
 
   list.innerHTML = pendingSpots.map((s, i) => {
     const isDefault = DEFAULT_SPOTS.find(d => d.id === s.id);
-    const needsFacing = !isDefault && s.beachFacing == null;
     return `
-    <div class="added-spot-item">
+    <div class="added-spot-item" data-idx="${i}">
+      <span class="drag-handle" data-idx="${i}">☰</span>
       <span class="added-spot-flag">${s.isUS ? '🇺🇸' : '🌍'}</span>
       <div class="added-spot-info">
         <span class="added-spot-name">${escapeHtml(s.name)}</span>
@@ -356,14 +356,12 @@ function renderEditorSpots() {
           ? (s.tideStation ? '✓ Tides' : '— No tides') + (s.marineZone ? ' · ✓ Forecast' : '')
           : 'Waves &amp; wind only'}${s.beachFacing != null ? ' · 🧭 ' + degToCompass(s.beachFacing) : ''}</span>
       </div>
-      <div class="spot-reorder-btns">
-        <button class="reorder-btn" onclick="moveSpotUp(${i})" ${i === 0 ? 'disabled style="opacity:0.3"' : ''}>▲</button>
-        <button class="reorder-btn" onclick="moveSpotDown(${i})" ${i === pendingSpots.length - 1 ? 'disabled style="opacity:0.3"' : ''}>▼</button>
-      </div>
       <button class="remove-spot-btn" onclick="removePendingSpot(${i})">×</button>
     </div>
     ${!isDefault ? facingPickerHTML(i) : ''}`;
   }).join('') + `<div class="spots-hint">${hint}</div>`;
+
+  initSpotDrag(list);
 }
 
 // ─── Location Pills ───────────────────────────────────────────────────────────
@@ -1738,9 +1736,93 @@ function updateOnlineStatus() {
   }
 }
 
-// ─── Spot Reorder ────────────────────────────────────────────────────────────
-function moveSpotUp(i)   { if (i > 0) { [pendingSpots[i-1], pendingSpots[i]] = [pendingSpots[i], pendingSpots[i-1]]; renderEditorSpots(); } }
-function moveSpotDown(i) { if (i < pendingSpots.length-1) { [pendingSpots[i], pendingSpots[i+1]] = [pendingSpots[i+1], pendingSpots[i]]; renderEditorSpots(); } }
+// ─── Spot Drag-to-Reorder ────────────────────────────────────────────────────
+function initSpotDrag(list) {
+  const handles = list.querySelectorAll('.drag-handle');
+  handles.forEach(h => {
+    h.addEventListener('touchstart', onDragStart, { passive: false });
+    h.addEventListener('mousedown', onDragStart);
+  });
+}
+
+let _dragState = null;
+
+function onDragStart(e) {
+  e.preventDefault();
+  const idx = parseInt(e.currentTarget.dataset.idx);
+  const item = e.currentTarget.closest('.added-spot-item');
+  const list = item.parentElement;
+  const items = [...list.querySelectorAll('.added-spot-item')];
+  const rect = item.getBoundingClientRect();
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+  // Create a floating clone
+  const clone = item.cloneNode(true);
+  clone.classList.add('drag-ghost');
+  clone.style.width = rect.width + 'px';
+  clone.style.top = rect.top + 'px';
+  clone.style.left = rect.left + 'px';
+  document.body.appendChild(clone);
+
+  item.classList.add('drag-placeholder');
+
+  _dragState = { idx, item, clone, list, items, startY: clientY, offsetY: 0, currentIdx: idx };
+
+  document.addEventListener('touchmove', onDragMove, { passive: false });
+  document.addEventListener('touchend', onDragEnd);
+  document.addEventListener('mousemove', onDragMove);
+  document.addEventListener('mouseup', onDragEnd);
+}
+
+function onDragMove(e) {
+  if (!_dragState) return;
+  e.preventDefault();
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  const dy = clientY - _dragState.startY;
+  _dragState.clone.style.transform = `translateY(${dy}px)`;
+
+  // Determine which slot we're over
+  const items = _dragState.items;
+  for (let i = 0; i < items.length; i++) {
+    const r = items[i].getBoundingClientRect();
+    const mid = r.top + r.height / 2;
+    if (clientY < mid && i < _dragState.currentIdx) {
+      // Move up
+      items[i].parentElement.insertBefore(_dragState.item, items[i]);
+      _dragState.items = [..._dragState.list.querySelectorAll('.added-spot-item')];
+      _dragState.currentIdx = i;
+      break;
+    } else if (clientY > mid && i > _dragState.currentIdx) {
+      // Move down
+      const next = items[i].nextElementSibling;
+      items[i].parentElement.insertBefore(_dragState.item, next);
+      _dragState.items = [..._dragState.list.querySelectorAll('.added-spot-item')];
+      _dragState.currentIdx = i;
+      break;
+    }
+  }
+}
+
+function onDragEnd() {
+  if (!_dragState) return;
+  _dragState.clone.remove();
+  _dragState.item.classList.remove('drag-placeholder');
+
+  // Apply the new order to pendingSpots
+  const from = _dragState.idx;
+  const to = _dragState.currentIdx;
+  if (from !== to) {
+    const [moved] = pendingSpots.splice(from, 1);
+    pendingSpots.splice(to, 0, moved);
+    renderEditorSpots();
+  }
+
+  document.removeEventListener('touchmove', onDragMove);
+  document.removeEventListener('touchend', onDragEnd);
+  document.removeEventListener('mousemove', onDragMove);
+  document.removeEventListener('mouseup', onDragEnd);
+  _dragState = null;
+}
 
 // ─── Beach Facing Picker ────────────────────────────────────────────────────
 function setBeachFacing(idx, deg) {
