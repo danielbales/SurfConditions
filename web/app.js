@@ -473,6 +473,16 @@ function getMoonPhase(date = new Date()) {
   return { name, icon, phase, fraction, daysToFull: Math.round(daysToFull) };
 }
 
+// ─── Wetsuit recommendation based on water temp (°F) ─────────────────────────
+function wetsuitRec(tempF) {
+  if (tempF >= 72) return { icon: '🩳', label: 'Boardshorts / Bikini — no wetsuit needed' };
+  if (tempF >= 68) return { icon: '🤿', label: 'Spring suit (2mm)' };
+  if (tempF >= 63) return { icon: '🧥', label: 'Full suit (3/2mm)' };
+  if (tempF >= 58) return { icon: '🧥', label: 'Full suit (4/3mm)' };
+  if (tempF >= 52) return { icon: '🥾', label: 'Full suit + boots (5/4mm)' };
+  return { icon: '🧊', label: 'Full suit + hood + boots (6/5mm)' };
+}
+
 // ─── 1. Wave Observations (Open-Meteo Marine current) ────────────────────────
 async function loadBuoy() {
   try {
@@ -512,7 +522,7 @@ async function loadBuoy() {
         ${wvhtFt !== '—' ? '<span class="stat-unit">ft</span>' : ''}
       </div>
       <div class="stat-label">Significant Wave Height (model)</div>
-      <div class="stats-grid">
+      <div class="stats-grid-3">
         <div class="stat-cell">
           <div class="label">Period</div>
           <div class="value">${dpd}<span style="font-size:12px;color:var(--text-muted)">s</span></div>
@@ -527,16 +537,26 @@ async function loadBuoy() {
           <div class="value small">${dirStr}</div>
           <div class="sub">${mwd !== null ? mwd + '°' : ''}</div>
         </div>
-        <div class="stat-cell">
-          <div class="label">Water Temp</div>
-          <div class="value">${sstF}<span style="font-size:12px;color:var(--text-muted)">${sstF !== '—' ? '°F' : ''}</span></div>
-          <div class="sub">${sstC !== null && sstC !== undefined ? sstC.toFixed(1) + '°C' : ''}</div>
-        </div>
       </div>
       <div class="buoy-source">${srcLink}</div>
     `);
+
+    // ── Water Temperature card ─────────────────────────────────────────────
+    const gearRec = sstF !== '—' ? wetsuitRec(parseFloat(sstF)) : null;
+    const celsiusSub = sstC !== null && sstC !== undefined ? ` · ${sstC.toFixed(1)}°C` : '';
+    setHTML('water-temp-body', sstF !== '—' ? `
+      <div class="stat-row">
+        <span class="stat-value" style="color:#1e90ff">${sstF}</span>
+        <span class="stat-unit">°F</span>
+      </div>
+      <div class="stat-label">${gearRec ? gearRec.label : ''}${celsiusSub}</div>
+      <div class="buoy-source">${srcLink}</div>
+    ` : errorHTML('Water temperature unavailable'));
+    const tempBadge = document.getElementById('water-temp-badge');
+    if (tempBadge) tempBadge.textContent = sstF !== '—' ? `${sstF}°F` : '--';
   } catch (e) {
     setHTML('buoy-body', errorHTML('Wave data unavailable: ' + e.message));
+    setHTML('water-temp-body', errorHTML('Water temperature unavailable'));
   }
 }
 
@@ -703,21 +723,27 @@ function setupSwellChart(pts) {
   canvas.addEventListener('mouseleave', hideTip);
 }
 
-// ─── Swell breakdown (Surfline-style stacked rows) ────────────────────────────
+// ─── Swell breakdown (Surfline-style stacked rows with colored arrows) ───────
+const SWELL_COLORS = ['#ff9800', '#e64e4e', '#1e90ff']; // orange, red, blue
+
 function swellBreakdownHTML(swells) {
+  // Always show all components — don't filter by height. Sort longest period first.
   const sorted = [...swells]
-    .filter(s => s.ht !== null && s.ht !== undefined && s.ht > 0)
-    .sort((a, b) => b.per - a.per); // longest period first (groundswell → windswell)
+    .filter(s => s.ht !== null && s.ht !== undefined)
+    .sort((a, b) => b.per - a.per);
 
   if (!sorted.length) return '';
 
   const rows = sorted.map((s, i) => {
     const rotDeg = (s.dir + 180) % 360;
+    const color = SWELL_COLORS[i] || SWELL_COLORS[2];
+    const htStr = s.ht.toFixed(1);
+    const isPrimary = i === 0;
     return `
-      <div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
-        <span style="font-size:${i === 0 ? '16px' : '14px'};font-weight:${i === 0 ? '700' : '500'};color:var(--text-primary);font-family:monospace;min-width:52px">${s.ht.toFixed(1)}ft</span>
-        <span style="font-size:${i === 0 ? '14px' : '13px'};color:var(--text-secondary);font-family:monospace;min-width:30px">${Math.round(s.per)}s</span>
-        <span style="display:inline-block;transform:rotate(${rotDeg}deg);font-size:14px;line-height:1;color:#1e90ff">↑</span>
+      <div style="display:flex;align-items:center;gap:10px;padding:6px 0;${i < sorted.length - 1 ? 'border-bottom:1px solid rgba(255,255,255,0.05)' : ''}">
+        <span style="font-size:${isPrimary ? '16px' : '14px'};font-weight:${isPrimary ? '700' : '500'};color:var(--text-primary);font-family:monospace;min-width:52px">${htStr}ft</span>
+        <span style="font-size:${isPrimary ? '14px' : '13px'};color:var(--text-secondary);font-family:monospace;min-width:30px">${Math.round(s.per)}s</span>
+        <span style="display:inline-block;width:18px;height:18px;border-radius:4px;background:${color};text-align:center;line-height:18px;font-size:12px;transform:rotate(${rotDeg}deg)">↑</span>
         <span style="font-size:13px;color:var(--text-secondary);font-family:monospace;min-width:36px">${degToCompass(s.dir)}</span>
         <span style="font-size:12px;color:var(--text-muted);font-family:monospace">${Math.round(s.dir)}°</span>
       </div>`;
@@ -725,7 +751,7 @@ function swellBreakdownHTML(swells) {
 
   return `
     <div style="margin-bottom:12px">
-      <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;font-family:monospace">Swell</div>
+      <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;font-family:monospace">Swell Components</div>
       ${rows}
     </div>`;
 }
@@ -796,7 +822,7 @@ function renderQuality() {
 async function loadSwell() {
   try {
     const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${LAT()}&longitude=${LNG()}`
-      + `&hourly=wave_height,wave_period,wave_direction,wind_wave_height,wind_wave_direction,wind_wave_period,swell_wave_height,swell_wave_period,swell_wave_direction`
+      + `&hourly=wave_height,wave_period,wave_direction,wind_wave_height,wind_wave_direction,wind_wave_period,swell_wave_height,swell_wave_period,swell_wave_direction,secondary_swell_wave_height,secondary_swell_wave_period,secondary_swell_wave_direction`
       + `&wind_speed_unit=kn&length_unit=imperial&timezone=auto&forecast_days=2&models=best_match`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -818,6 +844,9 @@ async function loadSwell() {
     const wwHt  = d.hourly.wind_wave_height[idx];
     const wwPer = d.hourly.wind_wave_period[idx];
     const wwDir = d.hourly.wind_wave_direction[idx];
+    const sw2Ht  = d.hourly.secondary_swell_wave_height?.[idx] ?? null;
+    const sw2Per = d.hourly.secondary_swell_wave_period?.[idx] ?? null;
+    const sw2Dir = d.hourly.secondary_swell_wave_direction?.[idx] ?? null;
 
     const dirStr   = degToCompass(wvDir);
     const swDirStr = degToCompass(swDir);
@@ -890,6 +919,7 @@ async function loadSwell() {
       ${swellAlignmentHTML(swDir, BEACH_FACING())}
       ${swellBreakdownHTML([
         { ht: swHt, per: swPer, dir: swDir },
+        ...(sw2Ht !== null ? [{ ht: sw2Ht, per: sw2Per, dir: sw2Dir }] : []),
         { ht: wwHt, per: wwPer, dir: wwDir },
       ])}
       ${swellArrivalHTML(swPer)}
