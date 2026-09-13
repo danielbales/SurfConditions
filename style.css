@@ -56,22 +56,34 @@ header {
   margin-top: 1px;
 }
 
-.refresh-btn {
-  background: var(--bg-card2);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  color: var(--accent-blue);
-  padding: 6px 14px;
-  font-size: 12px;
-  cursor: pointer;
+.header-right {
   display: flex;
   align-items: center;
-  gap: 5px;
-  transition: background 0.2s;
+  gap: 6px;
 }
 
-.refresh-btn:active { background: var(--border); }
-.refresh-btn.spinning .icon { animation: spin 1s linear infinite; }
+.header-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  padding: 0;
+  line-height: 1;
+}
+.header-btn:active {
+  background: var(--border);
+  border-color: var(--text-muted);
+}
+.header-btn .icon { font-size: 16px; }
+.header-btn.spinning .icon { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* Location selector */
@@ -569,18 +581,7 @@ main {
   .wind-info .speed { font-size: 26px; }
 }
 
-/* ─── Icon buttons (header) ──────────────────────────────────────────────── */
-.icon-btn {
-  background: none;
-  border: none;
-  font-size: 20px;
-  cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 8px;
-  transition: background 0.15s;
-  line-height: 1;
-}
-.icon-btn:active { background: var(--bg-card2); }
+/* (icon-btn removed — unified into .header-btn above) */
 
 /* ─── Pull-to-refresh ────────────────────────────────────────────────────── */
 .pull-indicator {
