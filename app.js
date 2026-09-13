@@ -543,19 +543,14 @@ async function loadBuoy() {
 
     // ── Water Temperature card ─────────────────────────────────────────────
     const gearRec = sstF !== '—' ? wetsuitRec(parseFloat(sstF)) : null;
+    const celsiusSub = sstC !== null && sstC !== undefined ? ` · ${sstC.toFixed(1)}°C` : '';
     setHTML('water-temp-body', sstF !== '—' ? `
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
-        <span style="font-size:32px">💧</span>
-        <div>
-          <div class="stat-row">
-            <span class="stat-value" style="color:#1e90ff">${sstF}</span>
-            <span class="stat-unit">°F</span>
-          </div>
-          <div class="stat-label" style="margin-bottom:0">${sstC !== null && sstC !== undefined ? sstC.toFixed(1) + '°C' : ''}</div>
-        </div>
+      <div class="stat-row">
+        <span class="stat-value" style="color:#1e90ff">${sstF}</span>
+        <span class="stat-unit">°F</span>
       </div>
-      ${gearRec ? `<div style="background:var(--bg-card2);border-radius:10px;padding:10px;font-size:12px;color:var(--text-secondary)"><span style="margin-right:6px">${gearRec.icon}</span>${gearRec.label}</div>` : ''}
-      <div class="buoy-source" style="margin-top:8px">${srcLink}</div>
+      <div class="stat-label">${gearRec ? gearRec.label : ''}${celsiusSub}</div>
+      <div class="buoy-source">${srcLink}</div>
     ` : errorHTML('Water temperature unavailable'));
     const tempBadge = document.getElementById('water-temp-badge');
     if (tempBadge) tempBadge.textContent = sstF !== '—' ? `${sstF}°F` : '--';
