@@ -344,18 +344,24 @@ function renderEditorSpots() {
     ? `${remaining} more spot${remaining !== 1 ? 's' : ''} can be added`
     : `Maximum ${MAX_SPOTS} spots reached`;
 
-  list.innerHTML = pendingSpots.map((s, i) => `
-    <div class="added-spot-item">
+  list.innerHTML = pendingSpots.map((s, i) => {
+    const isDefault = DEFAULT_SPOTS.find(d => d.id === s.id);
+    return `
+    <div class="added-spot-item" data-idx="${i}">
+      <span class="drag-handle" data-idx="${i}">☰</span>
       <span class="added-spot-flag">${s.isUS ? '🇺🇸' : '🌍'}</span>
       <div class="added-spot-info">
         <span class="added-spot-name">${escapeHtml(s.name)}</span>
         <span class="added-spot-meta">${s.isUS
           ? (s.tideStation ? '✓ Tides' : '— No tides') + (s.marineZone ? ' · ✓ Forecast' : '')
-          : 'Waves &amp; wind only'}</span>
+          : 'Waves &amp; wind only'}${s.beachFacing != null ? ' · 🧭 ' + degToCompass(s.beachFacing) : ''}</span>
       </div>
       <button class="remove-spot-btn" onclick="removePendingSpot(${i})">×</button>
     </div>
-  `).join('') + `<div class="spots-hint">${hint}</div>`;
+    ${!isDefault ? facingPickerHTML(i) : ''}`;
+  }).join('') + `<div class="spots-hint">${hint}</div>`;
+
+  initSpotDrag(list);
 }
 
 // ─── Location Pills ───────────────────────────────────────────────────────────
@@ -861,10 +867,20 @@ async function loadSwell() {
       <span><span style="display:inline-block;width:16px;height:0;border-top:1.5px dashed #00d4aa;vertical-align:middle;margin-right:4px"></span>Swell (ft)</span>
     </div>`;
 
+    // Forecast accuracy + best-time data
+    const accuracy = checkForecastAccuracy(ACTIVE.id, wvHt);
+    storeForecastSnapshot(ACTIVE.id, pts);
+    BEST_TIME_DATA.swell = pts;
+    computeBestTimes();
+
+    const accuracyBadge = accuracy
+      ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px">📊 Model accuracy: ${accuracy.accuracy}% (${accuracy.samples} samples)</div>`
+      : '';
+
     setHTML('swell-body', `
       <div class="swell-compass">
         <div class="compass-rose" title="${wvDir}°">
-          <span style="display:inline-block;transform:rotate(${wvDir + 180}deg);font-size:22px">↑</span>
+          <span style="display:inline-block;transform:rotate(${(wvDir + 180) % 360}deg);font-size:22px">↑</span>
         </div>
         <div>
           <div class="stat-row">
@@ -874,10 +890,13 @@ async function loadSwell() {
           <div class="stat-label">${wvPer?.toFixed(0) ?? '—'}s period · from ${dirStr} (${wvDir}°)</div>
         </div>
       </div>
+      ${swellAlignmentHTML(swDir, BEACH_FACING())}
       ${swellBreakdownHTML([
         { ht: swHt, per: swPer, dir: swDir },
         { ht: wwHt, per: wwPer, dir: wwDir },
       ])}
+      ${swellArrivalHTML(swPer)}
+      ${accuracyBadge}
       <div class="divider"></div>
       ${legend}
       <div style="position:relative;margin-bottom:10px">
@@ -912,6 +931,14 @@ async function loadWeather() {
 
     renderWind(d.hourly.wind_speed_10m[idx], d.hourly.wind_gusts_10m[idx], d.hourly.wind_direction_10m[idx]);
     renderWindForecast(d.hourly, idx);
+
+    // Feed best-time wind data
+    const windPts = [];
+    for (let i = idx; i < hours.length && windPts.length < 48; i++) {
+      windPts.push({ t: new Date(hours[i]), spd: d.hourly.wind_speed_10m[i] ?? 0, gst: d.hourly.wind_gusts_10m[i] ?? 0, dir: d.hourly.wind_direction_10m[i] ?? 0 });
+    }
+    BEST_TIME_DATA.wind = windPts;
+    computeBestTimes();
 
     // Quality rating expects mph; wind here is in knots
     const spdKn = d.hourly.wind_speed_10m[idx];
@@ -1016,8 +1043,11 @@ function renderWindForecast(hourly, currentIdx) {
   const dirTable = `<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;font-family:monospace">Direction Outlook · kts</div>
     <div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:8px">${dirRows}</div>`;
 
-  setHTML('wind-forecast-body', legend + svg + dirTable
+  setHTML('wind-forecast-body', legend
+    + `<div id="wind-chart-container" class="wind-chart-container" style="position:relative;margin-bottom:10px">${svg}<div id="wind-chart-tip" class="wind-chart-tip"></div></div>`
+    + dirTable
     + `<div class="buoy-source"><a href="https://open-meteo.com/en/docs" target="_blank" rel="noopener" class="src-link">Open-Meteo Weather API ↗</a></div>`);
+  setupWindChartInteraction(pts);
 }
 
 function renderWind(speedKts, gustKts, dir) {
@@ -1080,9 +1110,10 @@ async function loadTides() {
     const today = new Date();
     const pad = n => String(n).padStart(2, '0');
     const fmtDate = d => `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
-    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+    const endDate = new Date(today);
+    endDate.setDate(endDate.getDate() + (_tideRange === 'extended' ? 2 : 1));
     const base = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter`
-      + `?begin_date=${fmtDate(today)}&end_date=${fmtDate(tomorrow)}&station=${NOAA_STATION()}`
+      + `?begin_date=${fmtDate(today)}&end_date=${fmtDate(endDate)}&station=${NOAA_STATION()}`
       + `&datum=MLLW&time_zone=lst_ldt&units=english&application=web_services&format=json`;
 
     const [hourlyRes, hiloRes] = await Promise.all([
@@ -1105,8 +1136,9 @@ async function loadTides() {
     const W = 320, H = 110, PL = 30, PR = 8, PT = 12, PB = 20;
     const chartW = W - PL - PR, chartH = H - PT - PB;
 
+    const lookAhead = _tideRange === 'extended' ? 42 : 18;
     const tStart = new Date(now.getTime() - 6 * 3600000);
-    const tEnd   = new Date(now.getTime() + 18 * 3600000);
+    const tEnd   = new Date(now.getTime() + lookAhead * 3600000);
 
     const visible = hourly.filter(p => p.t >= tStart && p.t <= tEnd);
     if (visible.length < 2) throw new Error('Not enough data');
@@ -1209,10 +1241,20 @@ async function loadTides() {
       return next.type === 'H' ? '↑ Rising' : '↓ Falling';
     })();
 
+    // Feed best-time data
+    BEST_TIME_DATA.tides = hourly;
+    computeBestTimes();
+
+    const toggleLabel = _tideRange === 'extended' ? '24h' : '48h';
+    const toggleActive = _tideRange === 'extended' ? ' active' : '';
+
     setHTML('tides-body', `
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
         <span style="font-size:22px;font-weight:700;color:#1e90ff">${nowV.toFixed(2)}<span style="font-size:12px;color:var(--text-muted)"> ft</span></span>
-        <span style="font-size:12px;color:var(--text-secondary)">${trend}</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:12px;color:var(--text-secondary)">${trend}</span>
+          <button class="tide-toggle${toggleActive}" onclick="toggleTideRange()">${toggleLabel}</button>
+        </div>
       </div>
       ${svg}
       <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin:10px 0 5px">Today's Schedule</div>
@@ -1347,6 +1389,465 @@ async function loadRipCurrent() {
   }
 }
 
+// ─── 7. Sun & Moon ────────────────────────────────────────────────────────────
+async function loadSunrise() {
+  try {
+    const res = await fetch(`https://api.sunrise-sunset.org/json?lat=${LAT()}&lng=${LNG()}&formatted=0`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const d = await res.json();
+    if (d.status !== 'OK') throw new Error(d.status);
+    const r = d.results;
+
+    const sunrise    = new Date(r.sunrise);
+    const sunset     = new Date(r.sunset);
+    const firstLight = new Date(r.civil_twilight_begin);
+    const lastLight  = new Date(r.civil_twilight_end);
+
+    const goldenAMEnd   = new Date(sunrise.getTime() + 3600000);
+    const goldenPMStart = new Date(sunset.getTime()  - 3600000);
+
+    const dayMins = (sunset - sunrise) / 60000;
+    const dayH    = Math.floor(dayMins / 60);
+    const dayM    = Math.round(dayMins % 60);
+
+    const moon     = getMoonPhase();
+    const isSpring = (moon.phase < 3.7 || moon.phase > 25.8) || (moon.phase > 12.9 && moon.phase < 16.6);
+
+    setHTML('sun-moon-body', `
+      <div class="sun-moon-grid">
+        <div class="sun-section">
+          <div class="section-label">☀️ Sun</div>
+          <div class="sun-times">
+            <div class="time-row"><span class="lbl">First Light</span><span class="val">${fmtTime(firstLight)}</span></div>
+            <div class="time-row"><span class="lbl">Sunrise</span><span class="val">${fmtTime(sunrise)}</span></div>
+            <div class="time-row"><span class="lbl">Sunset</span><span class="val">${fmtTime(sunset)}</span></div>
+            <div class="time-row"><span class="lbl">Last Light</span><span class="val">${fmtTime(lastLight)}</span></div>
+            <div class="time-row" style="margin-top:4px;border-top:1px solid var(--border);padding-top:4px">
+              <span class="lbl">Day Length</span><span class="val">${dayH}h ${dayM}m</span>
+            </div>
+          </div>
+          <div style="margin-top:8px;font-size:10px;color:var(--text-muted)">
+            <div>🌅 ${fmtTime(sunrise)}–${fmtTime(goldenAMEnd)}</div>
+            <div>🌇 ${fmtTime(goldenPMStart)}–${fmtTime(sunset)}</div>
+          </div>
+        </div>
+        <div class="moon-section">
+          <div class="section-label">🌙 Moon</div>
+          <div class="moon-info">
+            <div class="moon-phase-icon">${moon.icon}</div>
+            <div class="moon-phase-name">${moon.name}</div>
+            <div style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:4px">
+              ${Math.round(moon.fraction * 100)}% illuminated
+            </div>
+            <div style="font-size:10px;color:var(--text-muted);text-align:center;margin-top:2px">
+              ${moon.daysToFull === 0 ? 'Full moon tonight' : moon.daysToFull + 'd to full moon'}
+            </div>
+            <div style="font-size:10px;color:var(--accent-purple);text-align:center;margin-top:4px">
+              ${isSpring ? '🌊 Spring tides (larger range)' : '〰️ Neap tides (smaller range)'}
+            </div>
+          </div>
+        </div>
+      </div>
+    `);
+  } catch (e) {
+    setHTML('sun-moon-body', errorHTML('Sun data unavailable: ' + e.message));
+  }
+}
+
+// ─── 8. UV Index ──────────────────────────────────────────────────────────────
+async function loadUV() {
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT()}&longitude=${LNG()}`
+      + `&current=uv_index&timezone=auto`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const d = await res.json();
+    const uv = d.current.uv_index;
+
+    let level, color, bg;
+    if (uv < 3)       { level = 'Low';       color = '#00c853'; bg = 'rgba(0,200,83,0.15)'; }
+    else if (uv < 6)  { level = 'Moderate';  color = '#ffeb3b'; bg = 'rgba(255,235,59,0.15)'; }
+    else if (uv < 8)  { level = 'High';      color = '#ff9800'; bg = 'rgba(255,152,0,0.15)'; }
+    else if (uv < 11) { level = 'Very High'; color = '#f44336'; bg = 'rgba(244,67,54,0.15)'; }
+    else               { level = 'Extreme';  color = '#9c27b0'; bg = 'rgba(156,39,176,0.15)'; }
+
+    setBadge('uv-badge', level.toUpperCase(), color, bg);
+
+    const pct = Math.min(100, (uv / 12) * 100);
+    setHTML('uv-body', `
+      <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:4px">
+        <span style="font-size:32px;font-weight:700;color:${color}">${uv.toFixed(1)}</span>
+        <span style="font-size:14px;color:var(--text-secondary)">${level}</span>
+      </div>
+      <div class="uv-bar-wrap">
+        <div class="uv-bar-track">
+          <div class="uv-bar-dot" style="left:${pct}%"></div>
+        </div>
+        <div class="uv-labels">
+          <span>Low</span><span>Moderate</span><span>High</span><span>Very High</span><span>Extreme</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:6px">
+        ${uv >= 6 ? '🧴 Sunscreen recommended' : uv >= 3 ? '🕶️ Sun protection advised' : '✓ Low exposure risk'}
+      </div>
+    `);
+  } catch (e) {
+    setHTML('uv-body', errorHTML('UV data unavailable: ' + e.message));
+  }
+}
+
+// ─── Swell-Beach Alignment ───────────────────────────────────────────────────
+function swellAlignmentHTML(swellDir, beachFacing) {
+  if (beachFacing == null || swellDir == null) return '';
+
+  let diff = Math.abs(swellDir - beachFacing);
+  if (diff > 180) diff = 360 - diff;
+
+  let quality, color, label;
+  if (diff < 30)      { quality = 'Optimal'; color = '#00c853'; label = 'Direct hit'; }
+  else if (diff < 45) { quality = 'Good';    color = '#69f0ae'; label = 'Good angle'; }
+  else if (diff < 70) { quality = 'Fair';    color = '#ffeb3b'; label = 'Angled'; }
+  else if (diff < 90) { quality = 'Poor';    color = '#ff9800'; label = 'Oblique'; }
+  else                { quality = 'Shadow';  color = '#f44336'; label = 'Shadowed'; }
+
+  return `
+    <div class="alignment-badge">
+      <div class="alignment-compass" style="border:2px solid ${color}">
+        <span class="swell-arrow" style="transform:rotate(${(swellDir + 180) % 360}deg)">↑</span>
+        <span class="beach-line" style="transform:rotate(${beachFacing}deg);color:${color}">━</span>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:600;color:${color}">${quality} Alignment</div>
+        <div style="font-size:10px;color:var(--text-muted)">${label} · ${Math.round(diff)}° off beach (${Math.round(beachFacing)}°)</div>
+      </div>
+    </div>`;
+}
+
+// ─── Swell Arrival Estimation ────────────────────────────────────────────────
+function swellArrivalHTML(period) {
+  if (!period || period < 12) return '';
+  const speedKn = 1.56 * period;
+  const distNM  = 2500;
+  const hours   = distNM / speedKn;
+  if (period >= 16) {
+    return `<div style="font-size:10px;color:var(--accent-purple);margin-top:4px">
+      🌏 Long-period groundswell · ~${speedKn.toFixed(0)} kts wave speed · ~${Math.round(hours / 24)}d travel from NP storm</div>`;
+  }
+  return `<div style="font-size:10px;color:var(--accent-blue);margin-top:4px">
+    🌊 Groundswell · ~${speedKn.toFixed(0)} kts wave speed</div>`;
+}
+
+// ─── Forecast Accuracy Tracking ──────────────────────────────────────────────
+function storeForecastSnapshot(spotId, swellPts) {
+  if (!swellPts || swellPts.length < 7) return;
+  try {
+    const key = 'forecast_history_' + spotId;
+    const history = JSON.parse(localStorage.getItem(key) || '[]');
+    history.push({
+      storedAt: Date.now(),
+      targetTime: swellPts[6].t.getTime(),
+      forecastWvHt: swellPts[6].wvHt,
+    });
+    if (history.length > 20) history.splice(0, history.length - 20);
+    localStorage.setItem(key, JSON.stringify(history));
+  } catch (e) {}
+}
+
+function checkForecastAccuracy(spotId, actualWvHt) {
+  try {
+    const key = 'forecast_history_' + spotId;
+    const history = JSON.parse(localStorage.getItem(key) || '[]');
+    const now = Date.now();
+    const expired = history.filter(e => e.targetTime < now && e.targetTime > now - 7200000 && !e.verified);
+    if (!expired.length || actualWvHt == null) return null;
+
+    const forecast = expired[expired.length - 1];
+    const pctError = forecast.forecastWvHt > 0
+      ? (Math.abs(forecast.forecastWvHt - actualWvHt) / forecast.forecastWvHt) * 100 : 0;
+    forecast.verified = true;
+    forecast.accuracy = Math.max(0, 100 - pctError);
+    localStorage.setItem(key, JSON.stringify(history));
+
+    const verified = history.filter(e => e.verified && e.accuracy != null);
+    if (!verified.length) return null;
+    return { accuracy: Math.round(verified.reduce((s, e) => s + e.accuracy, 0) / verified.length), samples: verified.length };
+  } catch (e) { return null; }
+}
+
+// ─── Best Time to Surf ──────────────────────────────────────────────────────
+const BEST_TIME_DATA = { swell: null, wind: null, tides: null };
+
+function computeBestTimes() {
+  const { swell, wind, tides } = BEST_TIME_DATA;
+  if (!swell || !wind) return;
+  const facing = BEACH_FACING();
+  const now = new Date();
+
+  const windows = [];
+  const len = Math.min(swell.length, wind.length);
+
+  for (let i = 0; i < len; i++) {
+    const sw = swell[i], w = wind[i];
+    let tideScore = 5;
+    if (tides && tides.length >= 2) {
+      const closest = tides.reduce((best, t) => Math.abs(t.t - sw.t) < Math.abs(best.t - sw.t) ? t : best);
+      const range = tides.reduce((r, t) => ({ min: Math.min(r.min, t.v), max: Math.max(r.max, t.v) }), { min: Infinity, max: -Infinity });
+      const span = (range.max - range.min) / 2 || 1;
+      tideScore = 10 * (1 - Math.abs(closest.v - (range.min + range.max) / 2) / span * 0.5);
+    }
+    const q = evaluateQuality({ ht: sw.swHt, per: sw.per, dir: sw.swDir }, w.spd * 1.15078, facing);
+    windows.push({ t: sw.t, score: tides ? q.score * 0.75 + tideScore * 0.25 : q.score, label: q.label, swHt: sw.swHt, wind: w.spd });
+  }
+
+  const sorted = [...windows].sort((a, b) => b.score - a.score);
+  const best = [];
+  for (const w of sorted) {
+    if (best.length >= 3 || w.score < 3) break;
+    if (!best.some(b => Math.abs(b.t - w.t) < 7200000)) best.push(w);
+  }
+  best.sort((a, b) => a.t - b.t);
+
+  if (!best.length) {
+    setHTML('best-time-body', '<div style="font-size:13px;color:var(--text-muted);padding:8px 0">No good windows in the next 48 hours</div>');
+    return;
+  }
+
+  const rows = best.map(w => {
+    const color = QUALITY_COLORS[w.label] || '#9e9e9e';
+    const isToday = w.t.getDate() === now.getDate();
+    const dayLabel = isToday ? 'Today' : w.t.toLocaleDateString([], { weekday: 'short' });
+    const h = Math.round((w.t - now) / 3600000);
+    const rel = h <= 0 ? 'Now' : h === 1 ? 'in 1h' : 'in ' + h + 'h';
+    return `
+      <div style="display:flex;align-items:center;gap:10px;background:var(--bg-card2);border-radius:10px;padding:10px;border-left:3px solid ${color}">
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;color:var(--text-primary)">${dayLabel} ${fmtTime(w.t)}</div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${rel} · ${w.swHt.toFixed(1)}ft · ${w.wind.toFixed(0)}kts wind</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:14px;font-weight:700;color:${color}">${w.label}</div>
+          <div style="font-size:10px;color:var(--text-muted)">${w.score.toFixed(1)}/10</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  setHTML('best-time-body', `
+    <div style="display:flex;flex-direction:column;gap:8px">${rows}</div>
+    <div style="font-size:9px;color:var(--text-muted);margin-top:8px">Based on swell, wind${tides ? ', and tide' : ''} forecasts</div>
+  `);
+}
+
+// ─── Wind Chart Touch Interaction ────────────────────────────────────────────
+function setupWindChartInteraction(pts) {
+  const container = document.getElementById('wind-chart-container');
+  const tip       = document.getElementById('wind-chart-tip');
+  if (!container || !tip) return;
+
+  const SVG_W = 320, PL = 32, PR = 6;
+  const tStart = pts[0].t.getTime(), tEnd = pts[pts.length - 1].t.getTime(), tRange = tEnd - tStart;
+
+  function idxFromX(clientX) {
+    const rect = container.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1,
+      ((clientX - rect.left) / rect.width - PL / SVG_W) / ((SVG_W - PL - PR) / SVG_W)));
+    const tgt = tStart + frac * tRange;
+    let best = 0, bestD = Infinity;
+    for (let i = 0; i < pts.length; i++) { const d = Math.abs(pts[i].t.getTime() - tgt); if (d < bestD) { bestD = d; best = i; } }
+    return best;
+  }
+
+  function show(clientX) {
+    const i = idxFromX(clientX), p = pts[i];
+    const rect = container.getBoundingClientRect();
+    const x = ((p.t.getTime() - tStart) / tRange * ((SVG_W - PL - PR) / SVG_W) + PL / SVG_W) * rect.width;
+    const tipW = tip.offsetWidth || 140;
+    tip.style.left = (x > rect.width / 2 ? Math.max(0, x - tipW - 8) : x + 10) + 'px';
+
+    const [, desc] = windClass(p.spd);
+    tip.innerHTML = `
+      <div style="font-size:10px;color:#00c853;font-family:monospace;margin-bottom:3px">${fmtTime(p.t)} ${p.t.toLocaleDateString([], { weekday: 'short' })}</div>
+      <div style="font-size:12px;color:#00c853;font-family:monospace"><b>${p.spd.toFixed(0)} kts</b> ${desc}</div>
+      <div style="font-size:11px;color:#ffeb3b;font-family:monospace">Gusts <b>${p.gst.toFixed(0)} kts</b></div>
+      <div style="font-size:11px;color:var(--text-muted);font-family:monospace">From ${degToCompass(p.dir)} (${Math.round(p.dir)}°)</div>`;
+    tip.style.display = 'block';
+
+    let ch = container.querySelector('.wind-crosshair');
+    if (!ch) { ch = document.createElement('div'); ch.className = 'wind-crosshair'; container.appendChild(ch); }
+    ch.style.left = x + 'px'; ch.style.display = 'block';
+  }
+
+  function hide() {
+    tip.style.display = 'none';
+    const ch = container.querySelector('.wind-crosshair'); if (ch) ch.style.display = 'none';
+  }
+
+  container.addEventListener('touchstart', e => { e.preventDefault(); show(e.touches[0].clientX); }, { passive: false });
+  container.addEventListener('touchmove',  e => { e.preventDefault(); show(e.touches[0].clientX); }, { passive: false });
+  container.addEventListener('touchend', hide);
+  container.addEventListener('mousemove', e => show(e.clientX));
+  container.addEventListener('mouseleave', hide);
+}
+
+// ─── Pull-to-Refresh ─────────────────────────────────────────────────────────
+function initPullToRefresh() {
+  const indicator = document.getElementById('pull-indicator');
+  if (!indicator) return;
+  const THRESHOLD = 80;
+  let startY = 0, pulling = false;
+
+  document.addEventListener('touchstart', e => {
+    if (window.scrollY === 0) { startY = e.touches[0].clientY; pulling = true; }
+  }, { passive: true });
+
+  document.addEventListener('touchmove', e => {
+    if (!pulling) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy > 0 && window.scrollY === 0) {
+      const progress = Math.min(1, dy / THRESHOLD);
+      indicator.style.display = 'flex';
+      indicator.style.transform = 'translateY(' + Math.min(dy * 0.5, 60) + 'px)';
+      indicator.style.opacity = String(progress);
+      indicator.querySelector('.pull-arrow').style.transform = progress >= 1 ? 'rotate(180deg)' : 'rotate(0deg)';
+      indicator.querySelector('.pull-text').textContent = progress >= 1 ? 'Release to refresh' : 'Pull to refresh';
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchend', () => {
+    if (!pulling) return;
+    pulling = false;
+    const triggered = parseFloat(indicator.style.opacity) >= 1;
+    indicator.style.transform = 'translateY(0)';
+    indicator.style.opacity = '0';
+    setTimeout(() => { indicator.style.display = 'none'; }, 300);
+    if (triggered) refreshAll();
+  }, { passive: true });
+}
+
+// ─── Offline Freshness ──────────────────────────────────────────────────────
+function updateOnlineStatus() {
+  const el = document.getElementById('offlineIndicator');
+  if (!el) return;
+  if (!navigator.onLine) {
+    const last = document.getElementById('lastUpdated');
+    el.textContent = '📡 Offline — ' + (last ? last.textContent : 'showing cached data');
+    el.style.display = 'block';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+// ─── Spot Drag-to-Reorder ────────────────────────────────────────────────────
+function initSpotDrag(list) {
+  const handles = list.querySelectorAll('.drag-handle');
+  handles.forEach(h => {
+    h.addEventListener('touchstart', onDragStart, { passive: false });
+    h.addEventListener('mousedown', onDragStart);
+  });
+}
+
+let _dragState = null;
+
+function onDragStart(e) {
+  e.preventDefault();
+  const idx = parseInt(e.currentTarget.dataset.idx);
+  const item = e.currentTarget.closest('.added-spot-item');
+  const list = item.parentElement;
+  const items = [...list.querySelectorAll('.added-spot-item')];
+  const rect = item.getBoundingClientRect();
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+  // Create a floating clone
+  const clone = item.cloneNode(true);
+  clone.classList.add('drag-ghost');
+  clone.style.width = rect.width + 'px';
+  clone.style.top = rect.top + 'px';
+  clone.style.left = rect.left + 'px';
+  document.body.appendChild(clone);
+
+  item.classList.add('drag-placeholder');
+
+  _dragState = { idx, item, clone, list, items, startY: clientY, offsetY: 0, currentIdx: idx };
+
+  document.addEventListener('touchmove', onDragMove, { passive: false });
+  document.addEventListener('touchend', onDragEnd);
+  document.addEventListener('mousemove', onDragMove);
+  document.addEventListener('mouseup', onDragEnd);
+}
+
+function onDragMove(e) {
+  if (!_dragState) return;
+  e.preventDefault();
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  const dy = clientY - _dragState.startY;
+  _dragState.clone.style.transform = `translateY(${dy}px)`;
+
+  // Determine which slot we're over
+  const items = _dragState.items;
+  for (let i = 0; i < items.length; i++) {
+    const r = items[i].getBoundingClientRect();
+    const mid = r.top + r.height / 2;
+    if (clientY < mid && i < _dragState.currentIdx) {
+      // Move up
+      items[i].parentElement.insertBefore(_dragState.item, items[i]);
+      _dragState.items = [..._dragState.list.querySelectorAll('.added-spot-item')];
+      _dragState.currentIdx = i;
+      break;
+    } else if (clientY > mid && i > _dragState.currentIdx) {
+      // Move down
+      const next = items[i].nextElementSibling;
+      items[i].parentElement.insertBefore(_dragState.item, next);
+      _dragState.items = [..._dragState.list.querySelectorAll('.added-spot-item')];
+      _dragState.currentIdx = i;
+      break;
+    }
+  }
+}
+
+function onDragEnd() {
+  if (!_dragState) return;
+  _dragState.clone.remove();
+  _dragState.item.classList.remove('drag-placeholder');
+
+  // Apply the new order to pendingSpots
+  const from = _dragState.idx;
+  const to = _dragState.currentIdx;
+  if (from !== to) {
+    const [moved] = pendingSpots.splice(from, 1);
+    pendingSpots.splice(to, 0, moved);
+    renderEditorSpots();
+  }
+
+  document.removeEventListener('touchmove', onDragMove);
+  document.removeEventListener('touchend', onDragEnd);
+  document.removeEventListener('mousemove', onDragMove);
+  document.removeEventListener('mouseup', onDragEnd);
+  _dragState = null;
+}
+
+// ─── Beach Facing Picker ────────────────────────────────────────────────────
+function setBeachFacing(idx, deg) {
+  if (pendingSpots[idx]) { pendingSpots[idx].beachFacing = deg; renderEditorSpots(); }
+}
+
+function facingPickerHTML(idx) {
+  const dirs = [
+    { d: 0, l: 'N' }, { d: 45, l: 'NE' }, { d: 90, l: 'E' }, { d: 135, l: 'SE' },
+    { d: 180, l: 'S' }, { d: 225, l: 'SW' }, { d: 270, l: 'W' }, { d: 315, l: 'NW' },
+  ];
+  const cur = pendingSpots[idx]?.beachFacing;
+  const btns = dirs.map(d =>
+    `<button class="facing-btn${cur === d.d ? ' active' : ''}" onclick="setBeachFacing(${idx},${d.d})">${d.l}</button>`
+  ).join('');
+  return `<div class="facing-label">Beach faces toward:</div><div class="facing-picker">${btns}</div>`;
+}
+
+// ─── Tide Range Toggle ──────────────────────────────────────────────────────
+let _tideRange = 'default';
+function toggleTideRange() {
+  _tideRange = _tideRange === 'default' ? 'extended' : 'default';
+  loadTides();
+}
+
 // ─── NWS dispatcher ───────────────────────────────────────────────────────────
 async function loadNWS() {
   if (!ACTIVE?.isUS) return;
@@ -1367,11 +1868,17 @@ async function refreshAll() {
   // Reset visible card bodies to loading state
   QSTATE.swell = null;
   QSTATE.windMph = null;
+  BEST_TIME_DATA.swell = null;
+  BEST_TIME_DATA.wind  = null;
+  BEST_TIME_DATA.tides = null;
   setHTML('quality-body',       loadingHTML());
+  setHTML('best-time-body',     loadingHTML());
   setHTML('buoy-body',          loadingHTML());
   setHTML('swell-body',         loadingHTML());
   setHTML('wind-body',          loadingHTML());
   setHTML('wind-forecast-body', loadingHTML());
+  setHTML('sun-moon-body',      loadingHTML());
+  setHTML('uv-body',            loadingHTML());
   if (ACTIVE.isUS && ACTIVE.tideStation) setHTML('tides-body',  loadingHTML());
   if (ACTIVE.isUS && ACTIVE.marineZone)  setHTML('marine-body', loadingHTML());
   if (ACTIVE.isUS)                       setHTML('rip-body',    loadingHTML());
@@ -1380,12 +1887,15 @@ async function refreshAll() {
     loadBuoy(),
     loadSwell(),
     loadWeather(),
+    loadSunrise(),
+    loadUV(),
     ACTIVE.isUS && ACTIVE.tideStation ? loadTides() : Promise.resolve(),
     ACTIVE.isUS ? loadNWS() : Promise.resolve(),
   ]);
 
   btn.classList.remove('spinning');
   setHTML('lastUpdated', `Updated ${fmtTime(new Date())}`);
+  updateOnlineStatus();
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
@@ -1405,3 +1915,9 @@ if (SAVED_SPOTS.length === 0) {
 
 // Auto-refresh every 10 minutes
 setInterval(refreshAll, 10 * 60 * 1000);
+
+// Pull-to-refresh + offline detection
+initPullToRefresh();
+window.addEventListener('online',  () => { updateOnlineStatus(); refreshAll(); });
+window.addEventListener('offline', updateOnlineStatus);
+updateOnlineStatus();
