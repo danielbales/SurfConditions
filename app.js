@@ -517,21 +517,28 @@ async function loadBuoy() {
       : `<a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener" class="src-link">Open-Meteo Marine API ↗</a>`;
 
     setHTML('buoy-body', `
-      <div class="conditions-cell">
-        <div class="conditions-label">Waves</div>
-        <div style="font-size:18px;font-weight:700;color:#00d4aa">${wvhtFt}<span style="font-size:11px;color:var(--text-muted)"> ft</span></div>
-        <div style="font-size:9px;color:var(--text-muted);margin-top:1px">${dpd}s period</div>
+      <div class="stat-row">
+        <span class="stat-value" style="color:#00d4aa">${wvhtFt}</span>
+        ${wvhtFt !== '—' ? '<span class="stat-unit">ft</span>' : ''}
       </div>
-      <div class="conditions-cell">
-        <div class="conditions-label">Swell</div>
-        <div style="font-size:18px;font-weight:700;color:var(--text-primary)">${swHt}<span style="font-size:11px;color:var(--text-muted)"> ft</span></div>
-        <div style="font-size:9px;color:var(--text-muted);margin-top:1px">${swPer}s · ${swDir !== null ? degToCompass(swDir) : '—'}</div>
+      <div class="stat-label">Significant Wave Height (model)</div>
+      <div class="stats-grid-3">
+        <div class="stat-cell">
+          <div class="label">Period</div>
+          <div class="value">${dpd}<span style="font-size:12px;color:var(--text-muted)">s</span></div>
+        </div>
+        <div class="stat-cell">
+          <div class="label">Swell</div>
+          <div class="value">${swHt}<span style="font-size:12px;color:var(--text-muted)">ft</span></div>
+          <div class="sub">${swPer}s · ${swDir !== null ? degToCompass(swDir) : '—'}</div>
+        </div>
+        <div class="stat-cell">
+          <div class="label">Direction</div>
+          <div class="value small">${dirStr}</div>
+          <div class="sub">${mwd !== null ? mwd + '°' : ''}</div>
+        </div>
       </div>
-      <div class="conditions-cell">
-        <div class="conditions-label">Direction</div>
-        <div style="font-size:18px;font-weight:700;color:var(--text-primary)">${dirStr}</div>
-        <div style="font-size:9px;color:var(--text-muted);margin-top:1px">${mwd !== null ? mwd + '°' : ''}</div>
-      </div>
+      <div class="buoy-source">${srcLink}</div>
     `);
 
     // ── Water Temperature (in conditions strip) ────────────────────────────
@@ -547,7 +554,7 @@ async function loadBuoy() {
       <div style="font-size:9px;color:var(--text-muted);margin-top:1px">${celsiusSub}</div>
     ` : `<div class="conditions-label">Water Temp</div><div style="font-size:10px;color:var(--text-muted)">Unavailable</div>`);
   } catch (e) {
-    setHTML('buoy-body', '<div class="conditions-cell" style="grid-column:1/-1"><div style="font-size:10px;color:var(--text-muted)">Wave data unavailable</div></div>');
+    setHTML('buoy-body', errorHTML('Wave data unavailable: ' + e.message));
     setHTML('water-temp-body', '<div class="conditions-label">Water Temp</div><div style="font-size:10px;color:var(--text-muted)">Unavailable</div>');
   }
 }

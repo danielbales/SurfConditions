@@ -23,7 +23,7 @@
 <header>
   <div class="header-left">
     <h1>🌊 Waves</h1>
-    <div class="subtitle"><span id="location-subtitle"></span> <span id="lastUpdated" class="updated-tag">Loading…</span></div>
+    <div class="subtitle" id="location-subtitle"></div>
   </div>
   <div class="header-right">
     <button class="header-btn" id="alertBtn" style="display:none" onclick="toggleAlerts()" title="Alerts OFF">🔕</button>
@@ -36,6 +36,7 @@
 
 <div class="location-selector" id="location-selector"></div>
 
+<div class="last-updated" id="lastUpdated">Loading…</div>
 <div class="offline-indicator" id="offlineIndicator" style="display:none">📡 Offline — showing cached data</div>
 
 <main>
@@ -58,9 +59,17 @@
           <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
         </div>
       </div>
-      <div class="conditions-waves" id="buoy-body">
-        <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-      </div>
+    </div>
+  </div>
+
+  <!-- Wave Observations (Open-Meteo Marine current) -->
+  <div class="card" id="card-buoy">
+    <div class="card-header">
+      <div class="card-title"><span class="icon">📡</span> Wave Observations</div>
+      <div class="card-badge" id="buoy-badge" style="background:rgba(0,212,170,0.15);color:#00d4aa">MODEL</div>
+    </div>
+    <div class="card-body" id="buoy-body">
+      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
     </div>
   </div>
 

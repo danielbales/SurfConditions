@@ -32,8 +32,8 @@ body {
 /* Header */
 header {
   background: linear-gradient(180deg, #071020 0%, var(--bg) 100%);
-  padding: 10px 12px 8px;
-  padding-top: calc(10px + env(safe-area-inset-top));
+  padding: 16px 16px 12px;
+  padding-top: calc(16px + env(safe-area-inset-top));
   position: sticky;
   top: 0;
   z-index: 100;
@@ -42,10 +42,9 @@ header {
   align-items: center;
   justify-content: space-between;
 }
-.updated-tag { color: var(--text-muted); }
 
 .header-left h1 {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: -0.3px;
@@ -90,8 +89,8 @@ header {
 /* Location selector */
 .location-selector {
   display: flex;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: 8px;
+  padding: 10px 16px;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
@@ -104,10 +103,10 @@ header {
   flex-shrink: 0;
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 20px;
   color: var(--text-secondary);
-  padding: 4px 12px;
-  font-size: 12px;
+  padding: 6px 16px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
@@ -128,14 +127,22 @@ header {
 }
 .src-link:hover { color: var(--accent-blue); text-decoration: underline; }
 
+/* Last updated */
+.last-updated {
+  text-align: center;
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 6px;
+}
+
 /* Main layout */
 main {
-  padding: 8px;
+  padding: 12px;
   max-width: 600px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
 }
 
 @media (min-width: 768px) {
@@ -159,7 +166,7 @@ main {
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 14px;
   overflow: hidden;
 }
 
@@ -167,7 +174,7 @@ main {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 10px 6px;
+  padding: 12px 14px 8px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -191,18 +198,18 @@ main {
   font-weight: 600;
 }
 
-.card-body { padding: 8px 10px; }
+.card-body { padding: 12px 14px; }
 
-/* Conditions strip (Quality + Water Temp + UV + Waves) */
+/* Conditions strip (Quality + Water Temp + UV) */
 .conditions-strip {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 6px;
+  gap: 8px;
 }
 .conditions-cell {
   background: var(--bg-card2);
-  border-radius: 8px;
-  padding: 8px;
+  border-radius: 10px;
+  padding: 10px;
   min-width: 0;
 }
 .conditions-label {
@@ -210,13 +217,7 @@ main {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-bottom: 4px;
-}
-.conditions-waves {
-  margin-top: 6px;
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 6px;
+  margin-bottom: 6px;
 }
 
 /* Primary stat */
@@ -250,21 +251,21 @@ main {
 .stats-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .stats-grid-3 {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .stat-cell {
   background: var(--bg-card2);
-  border-radius: 8px;
-  padding: 8px;
+  border-radius: 10px;
+  padding: 10px;
 }
 
 .stat-cell .label {
@@ -295,13 +296,13 @@ main {
 .wind-dir-display {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: 12px;
+  margin-bottom: 10px;
 }
 
 .wind-arrow-circle {
-  width: 44px;
-  height: 44px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   background: var(--bg-card2);
   border: 2px solid var(--border);
@@ -323,7 +324,7 @@ main {
   gap: 4px;
 }
 
-.wind-info .speed { font-size: 28px; font-weight: 700; }
+.wind-info .speed { font-size: 32px; font-weight: 700; }
 .wind-info .unit { font-size: 14px; color: var(--text-secondary); }
 .wind-info .desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 
