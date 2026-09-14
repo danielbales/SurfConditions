@@ -541,22 +541,21 @@ async function loadBuoy() {
       <div class="buoy-source">${srcLink}</div>
     `);
 
-    // ── Water Temperature card ─────────────────────────────────────────────
+    // ── Water Temperature (in conditions strip) ────────────────────────────
     const gearRec = sstF !== '—' ? wetsuitRec(parseFloat(sstF)) : null;
-    const celsiusSub = sstC !== null && sstC !== undefined ? ` · ${sstC.toFixed(1)}°C` : '';
+    const celsiusSub = sstC !== null && sstC !== undefined ? `${sstC.toFixed(1)}°C` : '';
     setHTML('water-temp-body', sstF !== '—' ? `
-      <div class="stat-row">
-        <span class="stat-value" style="color:#1e90ff">${sstF}</span>
-        <span class="stat-unit">°F</span>
+      <div class="conditions-label">Water Temp</div>
+      <div style="display:flex;align-items:baseline;gap:3px">
+        <span style="font-size:22px;font-weight:700;color:#1e90ff">${sstF}</span>
+        <span style="font-size:12px;color:var(--text-secondary)">°F</span>
       </div>
-      <div class="stat-label">${gearRec ? gearRec.label : ''}${celsiusSub}</div>
-      <div class="buoy-source">${srcLink}</div>
-    ` : errorHTML('Water temperature unavailable'));
-    const tempBadge = document.getElementById('water-temp-badge');
-    if (tempBadge) tempBadge.textContent = sstF !== '—' ? `${sstF}°F` : '--';
+      <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${gearRec ? gearRec.label : ''}</div>
+      <div style="font-size:9px;color:var(--text-muted);margin-top:1px">${celsiusSub}</div>
+    ` : `<div class="conditions-label">Water Temp</div><div style="font-size:10px;color:var(--text-muted)">Unavailable</div>`);
   } catch (e) {
     setHTML('buoy-body', errorHTML('Wave data unavailable: ' + e.message));
-    setHTML('water-temp-body', errorHTML('Water temperature unavailable'));
+    setHTML('water-temp-body', '<div class="conditions-label">Water Temp</div><div style="font-size:10px;color:var(--text-muted)">Unavailable</div>');
   }
 }
 
@@ -804,16 +803,14 @@ function renderQuality() {
 
   const pct = Math.round(q.score * 10);
   setHTML('quality-body', `
-    <div style="display:flex;align-items:center;gap:14px">
-      <span style="font-size:28px;font-weight:bold;font-family:monospace;color:${color}">${q.label}</span>
-      <span style="font-size:14px;color:var(--text-secondary);font-family:monospace">${q.score.toFixed(1)} / 10</span>
+    <div class="conditions-label">Surf Quality</div>
+    <div style="font-size:22px;font-weight:bold;font-family:monospace;color:${color}">${q.label}</div>
+    <div style="font-size:12px;color:var(--text-secondary);font-family:monospace">${q.score.toFixed(1)} / 10</div>
+    <div style="margin-top:6px;height:4px;border-radius:2px;background:rgba(155,155,155,0.15);overflow:hidden">
+      <div style="width:${pct}%;height:100%;border-radius:2px;background:${color}"></div>
     </div>
-    <div style="margin-top:8px;height:6px;border-radius:3px;background:rgba(155,155,155,0.15);overflow:hidden">
-      <div style="width:${pct}%;height:100%;border-radius:3px;background:${color}"></div>
-    </div>
-    <div style="margin-top:6px;font-size:10px;color:var(--text-muted);font-family:monospace">
-      swell ${QSTATE.swell.ht?.toFixed(1) ?? '—'} ft @ ${QSTATE.swell.per?.toFixed(0) ?? '—'}s
-      · wind ${QSTATE.windMph != null ? QSTATE.windMph.toFixed(0) + ' mph' : '—'}${BEACH_FACING() == null ? ' · direction ignored (custom spot)' : ''}
+    <div style="margin-top:4px;font-size:9px;color:var(--text-muted)">
+      ${QSTATE.swell.ht?.toFixed(1) ?? '—'}ft @ ${QSTATE.swell.per?.toFixed(0) ?? '—'}s · ${QSTATE.windMph != null ? QSTATE.windMph.toFixed(0) + ' mph' : '—'}
     </div>
   `);
 }
@@ -1498,28 +1495,22 @@ async function loadUV() {
     else if (uv < 11) { level = 'Very High'; color = '#f44336'; bg = 'rgba(244,67,54,0.15)'; }
     else               { level = 'Extreme';  color = '#9c27b0'; bg = 'rgba(156,39,176,0.15)'; }
 
-    setBadge('uv-badge', level.toUpperCase(), color, bg);
-
     const pct = Math.min(100, (uv / 12) * 100);
     setHTML('uv-body', `
-      <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:4px">
-        <span style="font-size:32px;font-weight:700;color:${color}">${uv.toFixed(1)}</span>
-        <span style="font-size:14px;color:var(--text-secondary)">${level}</span>
+      <div class="conditions-label">UV Index</div>
+      <div style="display:flex;align-items:baseline;gap:3px">
+        <span style="font-size:22px;font-weight:700;color:${color}">${uv.toFixed(1)}</span>
+        <span style="font-size:11px;color:var(--text-secondary)">${level}</span>
       </div>
-      <div class="uv-bar-wrap">
-        <div class="uv-bar-track">
-          <div class="uv-bar-dot" style="left:${pct}%"></div>
-        </div>
-        <div class="uv-labels">
-          <span>Low</span><span>Moderate</span><span>High</span><span>Very High</span><span>Extreme</span>
-        </div>
+      <div style="margin-top:6px;height:4px;border-radius:2px;background:linear-gradient(90deg,#00c853,#ffeb3b,#ff9800,#f44336,#9c27b0);position:relative;overflow:visible">
+        <div style="width:8px;height:8px;background:white;border:2px solid rgba(0,0,0,0.3);border-radius:50%;position:absolute;top:-2px;left:${pct}%;transform:translateX(-50%)"></div>
       </div>
-      <div style="font-size:10px;color:var(--text-muted);margin-top:6px">
-        ${uv >= 6 ? '🧴 Sunscreen recommended' : uv >= 3 ? '🕶️ Sun protection advised' : '✓ Low exposure risk'}
+      <div style="font-size:9px;color:var(--text-muted);margin-top:4px">
+        ${uv >= 6 ? 'Sunscreen recommended' : uv >= 3 ? 'Protection advised' : 'Low exposure'}
       </div>
     `);
   } catch (e) {
-    setHTML('uv-body', errorHTML('UV data unavailable: ' + e.message));
+    setHTML('uv-body', '<div class="conditions-label">UV Index</div><div style="font-size:10px;color:var(--text-muted)">Unavailable</div>');
   }
 }
 
