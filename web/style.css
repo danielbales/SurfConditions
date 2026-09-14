@@ -152,7 +152,7 @@ main {
     grid-template-columns: 1fr 1fr;
     gap: 12px;
   }
-  #card-quality, #card-best-time, #card-swell, #card-wind-forecast { grid-column: 1 / -1; }
+  #card-conditions, #card-best-time, #card-swell, #card-wind-forecast { grid-column: 1 / -1; }
 }
 
 @media (min-width: 1200px) {
@@ -199,6 +199,26 @@ main {
 }
 
 .card-body { padding: 12px 14px; }
+
+/* Conditions strip (Quality + Water Temp + UV) */
+.conditions-strip {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+.conditions-cell {
+  background: var(--bg-card2);
+  border-radius: 10px;
+  padding: 10px;
+  min-width: 0;
+}
+.conditions-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
 
 /* Primary stat */
 .stat-row {
