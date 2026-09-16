@@ -152,7 +152,7 @@ main {
     grid-template-columns: 1fr 1fr;
     gap: 12px;
   }
-  #card-quality, #card-best-time, #card-swell, #card-wind-forecast { grid-column: 1 / -1; }
+  .section-header, #card-quality, #card-swell, #card-wind-forecast, #card-7day, .card-row { grid-column: 1 / -1; }
 }
 
 @media (min-width: 1200px) {
@@ -160,6 +160,47 @@ main {
     max-width: 1200px;
     grid-template-columns: 1fr 1fr 1fr;
   }
+}
+
+/* Collapsible sections */
+.section {
+  display: contents;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 4px 4px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+}
+
+.section-chevron {
+  font-size: 12px;
+  color: var(--text-muted);
+  transition: transform 0.25s ease;
+}
+
+.section.collapsed .section-chevron {
+  transform: rotate(180deg);
+}
+
+.section-body {
+  display: contents;
+}
+
+.section.collapsed .section-body {
+  display: none;
 }
 
 /* Cards */

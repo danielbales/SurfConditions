@@ -439,6 +439,11 @@ function setHTML(id, html) {
   if (el) el.innerHTML = html;
 }
 
+function toggleSection(headerEl) {
+  const section = headerEl.closest('.section');
+  if (section) section.classList.toggle('collapsed');
+}
+
 function setBadge(id, label, color, bg) {
   const el = document.getElementById(id);
   if (el) { el.textContent = label; el.style.color = color; el.style.background = bg; }
