@@ -1,4 +1,4 @@
-const CACHE_NAME = 'surf-conditions-v19';
+const CACHE_NAME = 'surf-conditions-v20';
 const WORKER_URL = 'https://surf-alerts.dbales1210.workers.dev';
 const APP_SHELL = [
   '/SurfConditions/',
