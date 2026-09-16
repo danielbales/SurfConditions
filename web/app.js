@@ -908,11 +908,9 @@ async function loadSwell() {
       <span><span style="display:inline-block;width:16px;height:0;border-top:1.5px dashed #00d4aa;vertical-align:middle;margin-right:4px"></span>Swell (ft)</span>
     </div>`;
 
-    // Forecast accuracy + best-time data
+    // Forecast accuracy
     const accuracy = checkForecastAccuracy(ACTIVE.id, wvHt);
     storeForecastSnapshot(ACTIVE.id, pts);
-    BEST_TIME_DATA.swell = pts;
-    computeBestTimes();
 
     const accuracyBadge = accuracy
       ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px">📊 Model accuracy: ${accuracy.accuracy}% (${accuracy.samples} samples)</div>`
@@ -974,14 +972,10 @@ async function loadWeather() {
     renderWind(d.hourly.wind_speed_10m[idx], d.hourly.wind_gusts_10m[idx], d.hourly.wind_direction_10m[idx]);
     renderWindForecast(d.hourly, idx);
 
-    // Feed best-time wind data
     const windPts = [];
     for (let i = idx; i < hours.length && windPts.length < 48; i++) {
       windPts.push({ t: new Date(hours[i]), spd: d.hourly.wind_speed_10m[i] ?? 0, gst: d.hourly.wind_gusts_10m[i] ?? 0, dir: d.hourly.wind_direction_10m[i] ?? 0 });
     }
-    BEST_TIME_DATA.wind = windPts;
-    computeBestTimes();
-
     // ── Collect all 7-day hourly wind points for extended outlook ──────
     const allWindPts = [];
     for (let i = idx; i < hours.length; i++) {
@@ -1290,10 +1284,6 @@ async function loadTides() {
       if (!next) return '';
       return next.type === 'H' ? '↑ Rising' : '↓ Falling';
     })();
-
-    // Feed best-time data
-    BEST_TIME_DATA.tides = hourly;
-    computeBestTimes();
 
     const toggleLabel = _tideRange === 'extended' ? '24h' : '48h';
     const toggleActive = _tideRange === 'extended' ? ' active' : '';
@@ -1622,69 +1612,6 @@ function checkForecastAccuracy(spotId, actualWvHt) {
     if (!verified.length) return null;
     return { accuracy: Math.round(verified.reduce((s, e) => s + e.accuracy, 0) / verified.length), samples: verified.length };
   } catch (e) { return null; }
-}
-
-// ─── Best Time to Surf ──────────────────────────────────────────────────────
-const BEST_TIME_DATA = { swell: null, wind: null, tides: null };
-
-function computeBestTimes() {
-  const { swell, wind, tides } = BEST_TIME_DATA;
-  if (!swell || !wind) return;
-  const facing = BEACH_FACING();
-  const now = new Date();
-
-  const windows = [];
-  const len = Math.min(swell.length, wind.length);
-
-  for (let i = 0; i < len; i++) {
-    const sw = swell[i], w = wind[i];
-    let tideScore = 5;
-    if (tides && tides.length >= 2) {
-      const closest = tides.reduce((best, t) => Math.abs(t.t - sw.t) < Math.abs(best.t - sw.t) ? t : best);
-      const range = tides.reduce((r, t) => ({ min: Math.min(r.min, t.v), max: Math.max(r.max, t.v) }), { min: Infinity, max: -Infinity });
-      const span = (range.max - range.min) / 2 || 1;
-      tideScore = 10 * (1 - Math.abs(closest.v - (range.min + range.max) / 2) / span * 0.5);
-    }
-    const q = evaluateQuality({ ht: sw.swHt, per: sw.per, dir: sw.swDir }, w.spd * 1.15078, facing);
-    windows.push({ t: sw.t, score: tides ? q.score * 0.75 + tideScore * 0.25 : q.score, label: q.label, swHt: sw.swHt, wind: w.spd });
-  }
-
-  const sorted = [...windows].sort((a, b) => b.score - a.score);
-  const best = [];
-  for (const w of sorted) {
-    if (best.length >= 3 || w.score < 3) break;
-    if (!best.some(b => Math.abs(b.t - w.t) < 7200000)) best.push(w);
-  }
-  best.sort((a, b) => a.t - b.t);
-
-  if (!best.length) {
-    setHTML('best-time-body', '<div style="font-size:13px;color:var(--text-muted);padding:8px 0">No good windows in the next 48 hours</div>');
-    return;
-  }
-
-  const rows = best.map(w => {
-    const color = QUALITY_COLORS[w.label] || '#9e9e9e';
-    const isToday = w.t.getDate() === now.getDate();
-    const dayLabel = isToday ? 'Today' : w.t.toLocaleDateString([], { weekday: 'short' });
-    const h = Math.round((w.t - now) / 3600000);
-    const rel = h <= 0 ? 'Now' : h === 1 ? 'in 1h' : 'in ' + h + 'h';
-    return `
-      <div style="display:flex;align-items:center;gap:10px;background:var(--bg-card2);border-radius:10px;padding:10px;border-left:3px solid ${color}">
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:600;color:var(--text-primary)">${dayLabel} ${fmtTime(w.t)}</div>
-          <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${rel} · ${w.swHt.toFixed(1)}ft · ${w.wind.toFixed(0)}kts wind</div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-size:14px;font-weight:700;color:${color}">${w.label}</div>
-          <div style="font-size:10px;color:var(--text-muted)">${w.score.toFixed(1)}/10</div>
-        </div>
-      </div>`;
-  }).join('');
-
-  setHTML('best-time-body', `
-    <div style="display:flex;flex-direction:column;gap:8px">${rows}</div>
-    <div style="font-size:9px;color:var(--text-muted);margin-top:8px">Based on swell, wind${tides ? ', and tide' : ''} forecasts</div>
-  `);
 }
 
 // ─── Wind Chart Touch Interaction ────────────────────────────────────────────
@@ -2063,13 +1990,9 @@ async function refreshAll() {
   // Reset visible card bodies to loading state
   QSTATE.swell = null;
   QSTATE.windMph = null;
-  BEST_TIME_DATA.swell = null;
-  BEST_TIME_DATA.wind  = null;
-  BEST_TIME_DATA.tides = null;
   EXTENDED_DATA.swell = null;
   EXTENDED_DATA.wind  = null;
   setHTML('quality-body',       loadingHTML());
-  setHTML('best-time-body',     loadingHTML());
   setHTML('7day-body',          loadingHTML());
   setHTML('buoy-body',          loadingHTML());
   setHTML('swell-body',         loadingHTML());
