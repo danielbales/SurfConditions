@@ -1910,16 +1910,114 @@ async function loadNWS() {
 function render7DayOutlook() {
   if (!EXTENDED_DATA.swell || !EXTENDED_DATA.wind) return;
 
-  // Group hourly data by calendar date
+  const swPts = EXTENDED_DATA.swell;
+  const wnPts = EXTENDED_DATA.wind;
+  if (swPts.length < 2 || wnPts.length < 2) { setHTML('7day-body', errorHTML('Not enough forecast data')); return; }
+
+  const now = new Date();
+
+  // ── Shared chart dimensions ─────────────────────────────────────────────
+  const W = 320, PL = 32, PR = 6, PT = 8, PB = 18;
+  const cW = W - PL - PR;
+
+  // ── Build SVG chart helper ──────────────────────────────────────────────
+  function buildChart(pts, valueFn, opts) {
+    const H = opts.height || 90;
+    const cH = H - PT - PB;
+    const tStart = pts[0].t.getTime();
+    const tEnd = pts[pts.length - 1].t.getTime();
+    const tRange = tEnd - tStart || 1;
+    const tx = t => PL + ((t.getTime() - tStart) / tRange) * cW;
+    const vals = pts.map(valueFn);
+    const maxV = Math.max(...vals, ...(opts.secondaryFn ? pts.map(opts.secondaryFn) : []), opts.minMax || 1);
+    const ty = v => PT + (1 - v / maxV) * cH;
+
+    // Filled area
+    const areaPath = `M${tx(pts[0].t).toFixed(1)},${ty(0).toFixed(1)} `
+      + pts.map(p => `L${tx(p.t).toFixed(1)},${ty(valueFn(p)).toFixed(1)}`).join(' ')
+      + ` L${tx(pts[pts.length - 1].t).toFixed(1)},${ty(0).toFixed(1)} Z`;
+    const linePts = pts.map(p => `${tx(p.t).toFixed(1)},${ty(valueFn(p)).toFixed(1)}`).join(' ');
+
+    // Secondary line (dashed)
+    let secondaryLine = '';
+    if (opts.secondaryFn) {
+      const sPts = pts.map(p => `${tx(p.t).toFixed(1)},${ty(opts.secondaryFn(p)).toFixed(1)}`).join(' ');
+      secondaryLine = `<polyline points="${sPts}" fill="none" stroke="${opts.secondaryColor}" stroke-width="1" stroke-linejoin="round" stroke-dasharray="3,2"/>`;
+    }
+
+    // Y-axis
+    const yStep = maxV <= 3 ? 1 : maxV <= 6 ? 2 : maxV <= 15 ? 5 : 10;
+    let yLabels = '';
+    for (let v = 0; v <= maxV; v += yStep) {
+      yLabels += `<text x="${PL - 3}" y="${ty(v).toFixed(1)}" text-anchor="end" dominant-baseline="middle" fill="#607d8b" font-size="8" font-family="monospace">${v}</text>`;
+      yLabels += `<line x1="${PL}" y1="${ty(v).toFixed(1)}" x2="${W - PR}" y2="${ty(v).toFixed(1)}" stroke="#1a2e45" stroke-width="0.5"/>`;
+    }
+
+    // X-axis: day separators at midnight, day labels at noon
+    let xMarks = '';
+    let prevDate = '';
+    for (const p of pts) {
+      const dateStr = p.t.toDateString();
+      const h = p.t.getHours();
+      if (h === 0 && dateStr !== prevDate) {
+        const x = tx(p.t).toFixed(1);
+        xMarks += `<line x1="${x}" y1="${PT}" x2="${x}" y2="${PT + cH}" stroke="#1e3a5f" stroke-width="0.5"/>`;
+      }
+      if (h === 12 && dateStr !== prevDate) {
+        const x = tx(p.t).toFixed(1);
+        const isToday = dateStr === now.toDateString();
+        const tmr = new Date(now); tmr.setDate(tmr.getDate() + 1);
+        const isTmr = dateStr === tmr.toDateString();
+        const label = isToday ? 'Today' : isTmr ? 'Tmrw' : p.t.toLocaleDateString('en-US', { weekday: 'short' });
+        xMarks += `<text x="${x}" y="${H - 3}" text-anchor="middle" fill="#607d8b" font-size="7" font-family="monospace">${label}</text>`;
+      }
+      prevDate = dateStr;
+    }
+
+    // "Now" marker
+    const nowX = Math.max(PL, Math.min(W - PR, tx(now))).toFixed(1);
+    const nowLine = `<line x1="${nowX}" y1="${PT}" x2="${nowX}" y2="${PT + cH}" stroke="rgba(255,255,255,0.2)" stroke-width="1" stroke-dasharray="3,3"/>`;
+
+    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
+      ${yLabels}${xMarks}${nowLine}
+      <path d="${areaPath}" fill="${opts.fillColor}"/>
+      <polyline points="${linePts}" fill="none" stroke="${opts.lineColor}" stroke-width="1.5" stroke-linejoin="round"/>
+      ${secondaryLine}
+    </svg>`;
+  }
+
+  // ── Swell chart ─────────────────────────────────────────────────────────
+  const swellLegend = `<div style="display:flex;gap:14px;margin-bottom:4px;font-size:10px;color:var(--text-muted);font-family:monospace">
+    <span><span style="display:inline-block;width:16px;height:2px;background:#1e90ff;vertical-align:middle;margin-right:4px"></span>Wave (ft)</span>
+    <span><span style="display:inline-block;width:16px;height:0;border-top:1.5px dashed #00d4aa;vertical-align:middle;margin-right:4px"></span>Swell (ft)</span>
+  </div>`;
+  const swellChart = buildChart(swPts, p => p.wvHt, {
+    height: 90, minMax: 2,
+    lineColor: '#1e90ff', fillColor: 'rgba(30,144,255,0.12)',
+    secondaryFn: p => p.swHt, secondaryColor: '#00d4aa',
+  });
+
+  // ── Wind chart ──────────────────────────────────────────────────────────
+  const windLegend = `<div style="display:flex;gap:14px;margin-bottom:4px;margin-top:10px;font-size:10px;color:var(--text-muted);font-family:monospace">
+    <span><span style="display:inline-block;width:16px;height:2px;background:#00c853;vertical-align:middle;margin-right:4px"></span>Speed (kn)</span>
+    <span><span style="display:inline-block;width:16px;height:0;border-top:1.5px dashed #ffeb3b;vertical-align:middle;margin-right:4px"></span>Gusts</span>
+  </div>`;
+  const windChart = buildChart(wnPts, p => p.spd, {
+    height: 80, minMax: 5,
+    lineColor: '#00c853', fillColor: 'rgba(0,200,83,0.12)',
+    secondaryFn: p => p.gst, secondaryColor: '#ffeb3b',
+  });
+
+  // ── Daily summary table ─────────────────────────────────────────────────
   const dayMap = new Map();
-  for (const p of EXTENDED_DATA.swell) {
+  for (const p of swPts) {
     const key = p.t.toDateString();
     if (!dayMap.has(key)) dayMap.set(key, { date: new Date(p.t), swellAM: [], swellPM: [] });
     const h = p.t.getHours();
     if (h >= 6 && h < 12) dayMap.get(key).swellAM.push(p);
     else if (h >= 12 && h < 18) dayMap.get(key).swellPM.push(p);
   }
-  for (const p of EXTENDED_DATA.wind) {
+  for (const p of wnPts) {
     const key = p.t.toDateString();
     if (!dayMap.has(key)) continue;
     const entry = dayMap.get(key);
@@ -1929,95 +2027,71 @@ function render7DayOutlook() {
     else if (h >= 12 && h < 18) entry.windPM.push(p);
   }
 
-  // Summarize a swell window: peak height, period and direction at peak
   function sumSwell(arr) {
     if (!arr.length) return null;
     let best = arr[0];
     for (const p of arr) { if (p.swHt > best.swHt) best = p; }
     return { ht: best.swHt, per: best.per, dir: best.dir };
   }
-  // Summarize a wind window: mean speed, peak gust, mean direction
   function sumWind(arr) {
     if (!arr.length) return null;
-    let totalSpd = 0, maxGst = 0, sinSum = 0, cosSum = 0;
+    let totalSpd = 0, sinSum = 0, cosSum = 0;
     for (const p of arr) {
       totalSpd += p.spd;
-      if (p.gst > maxGst) maxGst = p.gst;
       sinSum += Math.sin(p.dir * Math.PI / 180);
       cosSum += Math.cos(p.dir * Math.PI / 180);
     }
     const avgDir = ((Math.atan2(sinSum, cosSum) * 180 / Math.PI) + 360) % 360;
-    return { spd: totalSpd / arr.length, gst: maxGst, dir: avgDir };
+    return { spd: totalSpd / arr.length, dir: avgDir };
   }
 
   const days = [...dayMap.values()].filter(d => d.swellAM.length || d.swellPM.length);
-  // Skip today if it's mostly over, otherwise keep all 7
-  const now = new Date();
-  if (days.length && days[0].date.toDateString() === now.toDateString() && now.getHours() >= 17) {
-    days.shift();
-  }
+  if (days.length && days[0].date.toDateString() === now.toDateString() && now.getHours() >= 17) days.shift();
   const show = days.slice(0, 7);
 
-  if (!show.length) { setHTML('7day-body', errorHTML('Not enough forecast data')); return; }
-
-  const isToday = (d) => d.date.toDateString() === now.toDateString();
-  const isTomorrow = (d) => {
-    const tmr = new Date(now); tmr.setDate(tmr.getDate() + 1);
-    return d.date.toDateString() === tmr.toDateString();
-  };
-
   function dayLabel(d) {
-    if (isToday(d)) return 'Today';
-    if (isTomorrow(d)) return 'Tomorrow';
+    if (d.date.toDateString() === now.toDateString()) return 'Today';
+    const tmr = new Date(now); tmr.setDate(tmr.getDate() + 1);
+    if (d.date.toDateString() === tmr.toDateString()) return 'Tmrw';
     return d.date.toLocaleDateString('en-US', { weekday: 'short' });
   }
-  function dateLabel(d) {
-    return d.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  }
-
   function swellCell(s) {
     if (!s) return '<span style="color:var(--text-muted)">-</span>';
     const color = s.ht >= 6 ? '#ff9800' : s.ht >= 3 ? '#1e90ff' : '#00d4aa';
     return `<span style="color:${color};font-weight:bold">${s.ht.toFixed(1)}</span>`
-      + `<span style="color:var(--text-muted)"> ft ${s.per.toFixed(0)}s</span>`
-      + ` <span style="display:inline-block;transform:rotate(${s.dir + 180}deg);color:#1e90ff">↑</span>`
-      + `<span style="color:var(--text-muted);font-size:9px"> ${degToCompass(s.dir)}</span>`;
+      + `<span style="color:var(--text-muted)"> ft ${s.per.toFixed(0)}s </span>`
+      + `<span style="display:inline-block;transform:rotate(${s.dir + 180}deg);color:#1e90ff">↑</span>`;
   }
-
   function windCell(w) {
     if (!w) return '<span style="color:var(--text-muted)">-</span>';
     const color = w.spd < 10 ? '#00c853' : w.spd < 20 ? '#ffeb3b' : '#f44336';
     return `<span style="color:${color};font-weight:bold">${w.spd.toFixed(0)}</span>`
-      + `<span style="color:var(--text-muted)"> kn</span>`
-      + ` <span style="display:inline-block;transform:rotate(${w.dir + 180}deg);color:#00c853">↑</span>`
-      + `<span style="color:var(--text-muted);font-size:9px"> ${degToCompass(w.dir)}</span>`;
+      + `<span style="color:var(--text-muted)"> kn </span>`
+      + `<span style="display:inline-block;transform:rotate(${w.dir + 180}deg);color:#00c853">↑</span>`;
   }
 
-  const rows = show.map(d => {
-    const sAM = sumSwell(d.swellAM), sPM = sumSwell(d.swellPM);
-    const wAM = sumWind(d.windAM || []), wPM = sumWind(d.windPM || []);
-    return `
-      <div style="padding:8px 0;border-bottom:1px solid var(--border)">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <span style="font-weight:bold;font-size:13px">${dayLabel(d)}</span>
-          <span style="font-size:10px;color:var(--text-muted)">${dateLabel(d)}</span>
-        </div>
-        <div style="display:grid;grid-template-columns:28px 1fr 1fr;gap:2px 8px;font-size:11px;font-family:monospace">
-          <span style="color:var(--text-muted);font-size:9px">AM</span>
-          <span>${swellCell(sAM)}</span>
-          <span>${windCell(wAM)}</span>
-          <span style="color:var(--text-muted);font-size:9px">PM</span>
-          <span>${swellCell(sPM)}</span>
-          <span>${windCell(wPM)}</span>
-        </div>
-      </div>`;
-  }).join('');
-
-  const header = `<div style="display:grid;grid-template-columns:28px 1fr 1fr;gap:2px 8px;font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-family:monospace;margin-bottom:4px;padding-bottom:6px;border-bottom:1px solid var(--border)">
-    <span></span><span>Swell</span><span>Wind</span>
+  const tableHeader = `<div style="display:grid;grid-template-columns:40px 28px 1fr 1fr;gap:1px 6px;font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-family:monospace;padding:6px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-top:12px">
+    <span></span><span></span><span>Swell</span><span>Wind</span>
   </div>`;
 
-  setHTML('7day-body', header + rows
+  const tableRows = show.map(d => {
+    const sAM = sumSwell(d.swellAM), sPM = sumSwell(d.swellPM);
+    const wAM = sumWind(d.windAM || []), wPM = sumWind(d.windPM || []);
+    return `<div style="display:grid;grid-template-columns:40px 28px 1fr 1fr;gap:1px 6px;font-size:11px;font-family:monospace;padding:5px 0;border-bottom:1px solid rgba(30,58,95,0.4)">
+      <span style="font-weight:bold;font-size:11px;grid-row:span 2;align-self:center">${dayLabel(d)}</span>
+      <span style="color:var(--text-muted);font-size:9px">AM</span>
+      <span>${swellCell(sAM)}</span>
+      <span>${windCell(wAM)}</span>
+      <span style="color:var(--text-muted);font-size:9px">PM</span>
+      <span>${swellCell(sPM)}</span>
+      <span>${windCell(wPM)}</span>
+    </div>`;
+  }).join('');
+
+  setHTML('7day-body',
+    swellLegend + swellChart
+    + windLegend + windChart
+    + tableHeader + tableRows
     + `<div class="buoy-source" style="margin-top:8px"><a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener" class="src-link">Open-Meteo Marine + Weather API ↗</a></div>`);
 }
 
