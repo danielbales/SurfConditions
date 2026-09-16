@@ -758,6 +758,7 @@ function swellBreakdownHTML(swells) {
 
 // ─── Surf Quality Rating (ported from macOS app SurfQuality.evaluate) ─────────
 const QSTATE = { swell: null, windMph: null };
+const EXTENDED_DATA = { swell: null, wind: null };
 
 function evaluateQuality(swell, windMph, facing) {
   if (!swell || !(swell.ht > 0.3)) return { label: 'FLAT', score: 0 };
@@ -823,7 +824,7 @@ async function loadSwell() {
   try {
     const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${LAT()}&longitude=${LNG()}`
       + `&hourly=wave_height,wave_period,wave_direction,wind_wave_height,wind_wave_direction,wind_wave_period,swell_wave_height,swell_wave_period,swell_wave_direction,secondary_swell_wave_height,secondary_swell_wave_period,secondary_swell_wave_direction`
-      + `&wind_speed_unit=kn&length_unit=imperial&timezone=auto&forecast_days=2&models=best_match`;
+      + `&wind_speed_unit=kn&length_unit=imperial&timezone=auto&forecast_days=7&models=best_match`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const d = await res.json();
@@ -866,6 +867,20 @@ async function loadSwell() {
         swDir: d.hourly.swell_wave_direction[i] ?? 0,
       });
     }
+
+    // ── Collect all 7-day hourly points for extended outlook ──────────────
+    const allSwellPts = [];
+    for (let i = idx; i < hours.length; i++) {
+      allSwellPts.push({
+        t:    new Date(hours[i]),
+        wvHt: d.hourly.wave_height[i] ?? 0,
+        swHt: d.hourly.swell_wave_height[i] ?? 0,
+        per:  d.hourly.swell_wave_period[i] ?? 0,
+        dir:  d.hourly.swell_wave_direction[i] ?? 0,
+      });
+    }
+    EXTENDED_DATA.swell = allSwellPts;
+    render7DayOutlook();
 
     // Direction table — every 3 hours, next 24 hours
     const dirSamples = [];
@@ -944,7 +959,7 @@ async function loadWeather() {
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT()}&longitude=${LNG()}`
       + `&hourly=wind_speed_10m,wind_gusts_10m,wind_direction_10m`
-      + `&wind_speed_unit=kn&timezone=auto&forecast_days=2`;
+      + `&wind_speed_unit=kn&timezone=auto&forecast_days=7`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const d = await res.json();
@@ -966,6 +981,14 @@ async function loadWeather() {
     }
     BEST_TIME_DATA.wind = windPts;
     computeBestTimes();
+
+    // ── Collect all 7-day hourly wind points for extended outlook ──────
+    const allWindPts = [];
+    for (let i = idx; i < hours.length; i++) {
+      allWindPts.push({ t: new Date(hours[i]), spd: d.hourly.wind_speed_10m[i] ?? 0, gst: d.hourly.wind_gusts_10m[i] ?? 0, dir: d.hourly.wind_direction_10m[i] ?? 0 });
+    }
+    EXTENDED_DATA.wind = allWindPts;
+    render7DayOutlook();
 
     // Quality rating expects mph; wind here is in knots
     const spdKn = d.hourly.wind_speed_10m[idx];
@@ -1883,6 +1906,121 @@ async function loadNWS() {
   await Promise.allSettled(tasks);
 }
 
+// ─── 7-Day Outlook ────────────────────────────────────────────────────────────
+function render7DayOutlook() {
+  if (!EXTENDED_DATA.swell || !EXTENDED_DATA.wind) return;
+
+  // Group hourly data by calendar date
+  const dayMap = new Map();
+  for (const p of EXTENDED_DATA.swell) {
+    const key = p.t.toDateString();
+    if (!dayMap.has(key)) dayMap.set(key, { date: new Date(p.t), swellAM: [], swellPM: [] });
+    const h = p.t.getHours();
+    if (h >= 6 && h < 12) dayMap.get(key).swellAM.push(p);
+    else if (h >= 12 && h < 18) dayMap.get(key).swellPM.push(p);
+  }
+  for (const p of EXTENDED_DATA.wind) {
+    const key = p.t.toDateString();
+    if (!dayMap.has(key)) continue;
+    const entry = dayMap.get(key);
+    if (!entry.windAM) { entry.windAM = []; entry.windPM = []; }
+    const h = p.t.getHours();
+    if (h >= 6 && h < 12) entry.windAM.push(p);
+    else if (h >= 12 && h < 18) entry.windPM.push(p);
+  }
+
+  // Summarize a swell window: peak height, period and direction at peak
+  function sumSwell(arr) {
+    if (!arr.length) return null;
+    let best = arr[0];
+    for (const p of arr) { if (p.swHt > best.swHt) best = p; }
+    return { ht: best.swHt, per: best.per, dir: best.dir };
+  }
+  // Summarize a wind window: mean speed, peak gust, mean direction
+  function sumWind(arr) {
+    if (!arr.length) return null;
+    let totalSpd = 0, maxGst = 0, sinSum = 0, cosSum = 0;
+    for (const p of arr) {
+      totalSpd += p.spd;
+      if (p.gst > maxGst) maxGst = p.gst;
+      sinSum += Math.sin(p.dir * Math.PI / 180);
+      cosSum += Math.cos(p.dir * Math.PI / 180);
+    }
+    const avgDir = ((Math.atan2(sinSum, cosSum) * 180 / Math.PI) + 360) % 360;
+    return { spd: totalSpd / arr.length, gst: maxGst, dir: avgDir };
+  }
+
+  const days = [...dayMap.values()].filter(d => d.swellAM.length || d.swellPM.length);
+  // Skip today if it's mostly over, otherwise keep all 7
+  const now = new Date();
+  if (days.length && days[0].date.toDateString() === now.toDateString() && now.getHours() >= 17) {
+    days.shift();
+  }
+  const show = days.slice(0, 7);
+
+  if (!show.length) { setHTML('7day-body', errorHTML('Not enough forecast data')); return; }
+
+  const isToday = (d) => d.date.toDateString() === now.toDateString();
+  const isTomorrow = (d) => {
+    const tmr = new Date(now); tmr.setDate(tmr.getDate() + 1);
+    return d.date.toDateString() === tmr.toDateString();
+  };
+
+  function dayLabel(d) {
+    if (isToday(d)) return 'Today';
+    if (isTomorrow(d)) return 'Tomorrow';
+    return d.date.toLocaleDateString('en-US', { weekday: 'short' });
+  }
+  function dateLabel(d) {
+    return d.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  function swellCell(s) {
+    if (!s) return '<span style="color:var(--text-muted)">-</span>';
+    const color = s.ht >= 6 ? '#ff9800' : s.ht >= 3 ? '#1e90ff' : '#00d4aa';
+    return `<span style="color:${color};font-weight:bold">${s.ht.toFixed(1)}</span>`
+      + `<span style="color:var(--text-muted)"> ft ${s.per.toFixed(0)}s</span>`
+      + ` <span style="display:inline-block;transform:rotate(${s.dir + 180}deg);color:#1e90ff">↑</span>`
+      + `<span style="color:var(--text-muted);font-size:9px"> ${degToCompass(s.dir)}</span>`;
+  }
+
+  function windCell(w) {
+    if (!w) return '<span style="color:var(--text-muted)">-</span>';
+    const color = w.spd < 10 ? '#00c853' : w.spd < 20 ? '#ffeb3b' : '#f44336';
+    return `<span style="color:${color};font-weight:bold">${w.spd.toFixed(0)}</span>`
+      + `<span style="color:var(--text-muted)"> kn</span>`
+      + ` <span style="display:inline-block;transform:rotate(${w.dir + 180}deg);color:#00c853">↑</span>`
+      + `<span style="color:var(--text-muted);font-size:9px"> ${degToCompass(w.dir)}</span>`;
+  }
+
+  const rows = show.map(d => {
+    const sAM = sumSwell(d.swellAM), sPM = sumSwell(d.swellPM);
+    const wAM = sumWind(d.windAM || []), wPM = sumWind(d.windPM || []);
+    return `
+      <div style="padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-weight:bold;font-size:13px">${dayLabel(d)}</span>
+          <span style="font-size:10px;color:var(--text-muted)">${dateLabel(d)}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:28px 1fr 1fr;gap:2px 8px;font-size:11px;font-family:monospace">
+          <span style="color:var(--text-muted);font-size:9px">AM</span>
+          <span>${swellCell(sAM)}</span>
+          <span>${windCell(wAM)}</span>
+          <span style="color:var(--text-muted);font-size:9px">PM</span>
+          <span>${swellCell(sPM)}</span>
+          <span>${windCell(wPM)}</span>
+        </div>
+      </div>`;
+  }).join('');
+
+  const header = `<div style="display:grid;grid-template-columns:28px 1fr 1fr;gap:2px 8px;font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-family:monospace;margin-bottom:4px;padding-bottom:6px;border-bottom:1px solid var(--border)">
+    <span></span><span>Swell</span><span>Wind</span>
+  </div>`;
+
+  setHTML('7day-body', header + rows
+    + `<div class="buoy-source" style="margin-top:8px"><a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener" class="src-link">Open-Meteo Marine + Weather API ↗</a></div>`);
+}
+
 // ─── Refresh all ──────────────────────────────────────────────────────────────
 async function refreshAll() {
   if (!ACTIVE) return;
@@ -1897,8 +2035,11 @@ async function refreshAll() {
   BEST_TIME_DATA.swell = null;
   BEST_TIME_DATA.wind  = null;
   BEST_TIME_DATA.tides = null;
+  EXTENDED_DATA.swell = null;
+  EXTENDED_DATA.wind  = null;
   setHTML('quality-body',       loadingHTML());
   setHTML('best-time-body',     loadingHTML());
+  setHTML('7day-body',          loadingHTML());
   setHTML('buoy-body',          loadingHTML());
   setHTML('swell-body',         loadingHTML());
   setHTML('wind-body',          loadingHTML());
