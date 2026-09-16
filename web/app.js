@@ -1916,183 +1916,140 @@ function render7DayOutlook() {
 
   const now = new Date();
 
-  // ── Shared chart dimensions ─────────────────────────────────────────────
-  const W = 320, PL = 32, PR = 6, PT = 8, PB = 18;
-  const cW = W - PL - PR;
-
-  // ── Build SVG chart helper ──────────────────────────────────────────────
-  function buildChart(pts, valueFn, opts) {
-    const H = opts.height || 90;
-    const cH = H - PT - PB;
-    const tStart = pts[0].t.getTime();
-    const tEnd = pts[pts.length - 1].t.getTime();
-    const tRange = tEnd - tStart || 1;
-    const tx = t => PL + ((t.getTime() - tStart) / tRange) * cW;
-    const vals = pts.map(valueFn);
-    const maxV = Math.max(...vals, ...(opts.secondaryFn ? pts.map(opts.secondaryFn) : []), opts.minMax || 1);
-    const ty = v => PT + (1 - v / maxV) * cH;
-
-    // Filled area
-    const areaPath = `M${tx(pts[0].t).toFixed(1)},${ty(0).toFixed(1)} `
-      + pts.map(p => `L${tx(p.t).toFixed(1)},${ty(valueFn(p)).toFixed(1)}`).join(' ')
-      + ` L${tx(pts[pts.length - 1].t).toFixed(1)},${ty(0).toFixed(1)} Z`;
-    const linePts = pts.map(p => `${tx(p.t).toFixed(1)},${ty(valueFn(p)).toFixed(1)}`).join(' ');
-
-    // Secondary line (dashed)
-    let secondaryLine = '';
-    if (opts.secondaryFn) {
-      const sPts = pts.map(p => `${tx(p.t).toFixed(1)},${ty(opts.secondaryFn(p)).toFixed(1)}`).join(' ');
-      secondaryLine = `<polyline points="${sPts}" fill="none" stroke="${opts.secondaryColor}" stroke-width="1" stroke-linejoin="round" stroke-dasharray="3,2"/>`;
-    }
-
-    // Y-axis
-    const yStep = maxV <= 3 ? 1 : maxV <= 6 ? 2 : maxV <= 15 ? 5 : 10;
-    let yLabels = '';
-    for (let v = 0; v <= maxV; v += yStep) {
-      yLabels += `<text x="${PL - 3}" y="${ty(v).toFixed(1)}" text-anchor="end" dominant-baseline="middle" fill="#607d8b" font-size="8" font-family="monospace">${v}</text>`;
-      yLabels += `<line x1="${PL}" y1="${ty(v).toFixed(1)}" x2="${W - PR}" y2="${ty(v).toFixed(1)}" stroke="#1a2e45" stroke-width="0.5"/>`;
-    }
-
-    // X-axis: day separators at midnight, day labels at noon
-    let xMarks = '';
-    let prevDate = '';
-    for (const p of pts) {
-      const dateStr = p.t.toDateString();
-      const h = p.t.getHours();
-      if (h === 0 && dateStr !== prevDate) {
-        const x = tx(p.t).toFixed(1);
-        xMarks += `<line x1="${x}" y1="${PT}" x2="${x}" y2="${PT + cH}" stroke="#1e3a5f" stroke-width="0.5"/>`;
-      }
-      if (h === 12 && dateStr !== prevDate) {
-        const x = tx(p.t).toFixed(1);
-        const isToday = dateStr === now.toDateString();
-        const tmr = new Date(now); tmr.setDate(tmr.getDate() + 1);
-        const isTmr = dateStr === tmr.toDateString();
-        const label = isToday ? 'Today' : isTmr ? 'Tmrw' : p.t.toLocaleDateString('en-US', { weekday: 'short' });
-        xMarks += `<text x="${x}" y="${H - 3}" text-anchor="middle" fill="#607d8b" font-size="7" font-family="monospace">${label}</text>`;
-      }
-      prevDate = dateStr;
-    }
-
-    // "Now" marker
-    const nowX = Math.max(PL, Math.min(W - PR, tx(now))).toFixed(1);
-    const nowLine = `<line x1="${nowX}" y1="${PT}" x2="${nowX}" y2="${PT + cH}" stroke="rgba(255,255,255,0.2)" stroke-width="1" stroke-dasharray="3,3"/>`;
-
-    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
-      ${yLabels}${xMarks}${nowLine}
-      <path d="${areaPath}" fill="${opts.fillColor}"/>
-      <polyline points="${linePts}" fill="none" stroke="${opts.lineColor}" stroke-width="1.5" stroke-linejoin="round"/>
-      ${secondaryLine}
-    </svg>`;
-  }
-
-  // ── Swell chart ─────────────────────────────────────────────────────────
-  const swellLegend = `<div style="display:flex;gap:14px;margin-bottom:4px;font-size:10px;color:var(--text-muted);font-family:monospace">
-    <span><span style="display:inline-block;width:16px;height:2px;background:#1e90ff;vertical-align:middle;margin-right:4px"></span>Wave (ft)</span>
-    <span><span style="display:inline-block;width:16px;height:0;border-top:1.5px dashed #00d4aa;vertical-align:middle;margin-right:4px"></span>Swell (ft)</span>
-  </div>`;
-  const swellChart = buildChart(swPts, p => p.wvHt, {
-    height: 90, minMax: 2,
-    lineColor: '#1e90ff', fillColor: 'rgba(30,144,255,0.12)',
-    secondaryFn: p => p.swHt, secondaryColor: '#00d4aa',
-  });
-
-  // ── Wind chart ──────────────────────────────────────────────────────────
-  const windLegend = `<div style="display:flex;gap:14px;margin-bottom:4px;margin-top:10px;font-size:10px;color:var(--text-muted);font-family:monospace">
-    <span><span style="display:inline-block;width:16px;height:2px;background:#00c853;vertical-align:middle;margin-right:4px"></span>Speed (kn)</span>
-    <span><span style="display:inline-block;width:16px;height:0;border-top:1.5px dashed #ffeb3b;vertical-align:middle;margin-right:4px"></span>Gusts</span>
-  </div>`;
-  const windChart = buildChart(wnPts, p => p.spd, {
-    height: 80, minMax: 5,
-    lineColor: '#00c853', fillColor: 'rgba(0,200,83,0.12)',
-    secondaryFn: p => p.gst, secondaryColor: '#ffeb3b',
-  });
-
-  // ── Daily summary table ─────────────────────────────────────────────────
+  // ── Group hourly data by calendar date into 3 windows ───────────────────
+  // AM = 6-11, MID = 11-15, PM = 15-20
   const dayMap = new Map();
   for (const p of swPts) {
     const key = p.t.toDateString();
-    if (!dayMap.has(key)) dayMap.set(key, { date: new Date(p.t), swellAM: [], swellPM: [] });
+    if (!dayMap.has(key)) dayMap.set(key, { date: new Date(key), swell: [[], [], []], wind: [[], [], []] });
     const h = p.t.getHours();
-    if (h >= 6 && h < 12) dayMap.get(key).swellAM.push(p);
-    else if (h >= 12 && h < 18) dayMap.get(key).swellPM.push(p);
+    const slot = h >= 6 && h < 11 ? 0 : h >= 11 && h < 15 ? 1 : h >= 15 && h < 20 ? 2 : -1;
+    if (slot >= 0) dayMap.get(key).swell[slot].push(p);
   }
   for (const p of wnPts) {
     const key = p.t.toDateString();
     if (!dayMap.has(key)) continue;
-    const entry = dayMap.get(key);
-    if (!entry.windAM) { entry.windAM = []; entry.windPM = []; }
     const h = p.t.getHours();
-    if (h >= 6 && h < 12) entry.windAM.push(p);
-    else if (h >= 12 && h < 18) entry.windPM.push(p);
+    const slot = h >= 6 && h < 11 ? 0 : h >= 11 && h < 15 ? 1 : h >= 15 && h < 20 ? 2 : -1;
+    if (slot >= 0) dayMap.get(key).wind[slot].push(p);
   }
 
-  function sumSwell(arr) {
-    if (!arr.length) return null;
-    let best = arr[0];
-    for (const p of arr) { if (p.swHt > best.swHt) best = p; }
-    return { ht: best.swHt, per: best.per, dir: best.dir };
+  const days = [...dayMap.values()].filter(d => d.swell.some(s => s.length));
+  if (days.length && days[0].date.toDateString() === now.toDateString() && now.getHours() >= 19) days.shift();
+  const show = days.slice(0, 7);
+  if (!show.length) { setHTML('7day-body', errorHTML('Not enough forecast data')); return; }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────
+  function dayLabel(d) {
+    if (d.date.toDateString() === now.toDateString()) return 'Today';
+    const tmr = new Date(now); tmr.setDate(tmr.getDate() + 1);
+    if (d.date.toDateString() === tmr.toDateString()) return 'Tomorrow';
+    return d.date.toLocaleDateString('en-US', { weekday: 'short' });
   }
-  function sumWind(arr) {
+  function dateLabel(d) {
+    return d.date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+  }
+
+  // Swell range for a day (all 3 windows combined)
+  function swellRange(d) {
+    const all = d.swell.flat();
+    if (!all.length) return null;
+    let lo = Infinity, hi = -Infinity, bestPer = 0, bestDir = 0, bestHt = 0;
+    for (const p of all) {
+      if (p.swHt < lo) lo = p.swHt;
+      if (p.swHt > hi) { hi = p.swHt; bestPer = p.per; bestDir = p.dir; bestHt = p.swHt; }
+    }
+    return { lo: Math.round(lo), hi: Math.round(hi), per: bestPer, dir: bestDir };
+  }
+
+  // Wind summary per slot
+  function windAvg(arr) {
     if (!arr.length) return null;
-    let totalSpd = 0, sinSum = 0, cosSum = 0;
+    let sinSum = 0, cosSum = 0, totalSpd = 0;
     for (const p of arr) {
       totalSpd += p.spd;
       sinSum += Math.sin(p.dir * Math.PI / 180);
       cosSum += Math.cos(p.dir * Math.PI / 180);
     }
-    const avgDir = ((Math.atan2(sinSum, cosSum) * 180 / Math.PI) + 360) % 360;
-    return { spd: totalSpd / arr.length, dir: avgDir };
+    return { spd: totalSpd / arr.length, dir: ((Math.atan2(sinSum, cosSum) * 180 / Math.PI) + 360) % 360 };
   }
 
-  const days = [...dayMap.values()].filter(d => d.swellAM.length || d.swellPM.length);
-  if (days.length && days[0].date.toDateString() === now.toDateString() && now.getHours() >= 17) days.shift();
-  const show = days.slice(0, 7);
-
-  function dayLabel(d) {
-    if (d.date.toDateString() === now.toDateString()) return 'Today';
-    const tmr = new Date(now); tmr.setDate(tmr.getDate() + 1);
-    if (d.date.toDateString() === tmr.toDateString()) return 'Tmrw';
-    return d.date.toLocaleDateString('en-US', { weekday: 'short' });
-  }
-  function swellCell(s) {
-    if (!s) return '<span style="color:var(--text-muted)">-</span>';
-    const color = s.ht >= 6 ? '#ff9800' : s.ht >= 3 ? '#1e90ff' : '#00d4aa';
-    return `<span style="color:${color};font-weight:bold">${s.ht.toFixed(1)}</span>`
-      + `<span style="color:var(--text-muted)"> ft ${s.per.toFixed(0)}s </span>`
-      + `<span style="display:inline-block;transform:rotate(${s.dir + 180}deg);color:#1e90ff">↑</span>`;
-  }
-  function windCell(w) {
-    if (!w) return '<span style="color:var(--text-muted)">-</span>';
-    const color = w.spd < 10 ? '#00c853' : w.spd < 20 ? '#ffeb3b' : '#f44336';
-    return `<span style="color:${color};font-weight:bold">${w.spd.toFixed(0)}</span>`
-      + `<span style="color:var(--text-muted)"> kn </span>`
-      + `<span style="display:inline-block;transform:rotate(${w.dir + 180}deg);color:#00c853">↑</span>`;
+  // Swell bar color: green = good size, yellow = ok, orange = small, red = flat
+  function swellBarColor(arr) {
+    if (!arr.length) return '#555';
+    const max = Math.max(...arr.map(p => p.swHt));
+    if (max >= 5) return '#00c853';
+    if (max >= 3) return '#8bc34a';
+    if (max >= 1.5) return '#ffeb3b';
+    if (max >= 0.5) return '#ff9800';
+    return '#f44336';
   }
 
-  const tableHeader = `<div style="display:grid;grid-template-columns:40px 28px 1fr 1fr;gap:1px 6px;font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-family:monospace;padding:6px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-top:12px">
-    <span></span><span></span><span>Swell</span><span>Wind</span>
-  </div>`;
+  // Wind bar color: green = calm, yellow = mod, orange = fresh, red = strong
+  function windBarColor(arr) {
+    if (!arr.length) return '#555';
+    const avg = arr.reduce((s, p) => s + p.spd, 0) / arr.length;
+    if (avg < 8) return '#00c853';
+    if (avg < 14) return '#ffeb3b';
+    if (avg < 22) return '#ff9800';
+    return '#f44336';
+  }
 
-  const tableRows = show.map(d => {
-    const sAM = sumSwell(d.swellAM), sPM = sumSwell(d.swellPM);
-    const wAM = sumWind(d.windAM || []), wPM = sumWind(d.windPM || []);
-    return `<div style="display:grid;grid-template-columns:40px 28px 1fr 1fr;gap:1px 6px;font-size:11px;font-family:monospace;padding:5px 0;border-bottom:1px solid rgba(30,58,95,0.4)">
-      <span style="font-weight:bold;font-size:11px;grid-row:span 2;align-self:center">${dayLabel(d)}</span>
-      <span style="color:var(--text-muted);font-size:9px">AM</span>
-      <span>${swellCell(sAM)}</span>
-      <span>${windCell(wAM)}</span>
-      <span style="color:var(--text-muted);font-size:9px">PM</span>
-      <span>${swellCell(sPM)}</span>
-      <span>${windCell(wPM)}</span>
+  // Height range text like "4-6ft" or "2-3ft+"
+  function rangeText(r) {
+    if (!r) return '-';
+    if (r.lo === r.hi) return `${r.hi}ft`;
+    const plus = r.hi >= 6 ? '+' : '';
+    return `${r.lo}-${r.hi}ft${plus}`;
+  }
+
+  // ── Build columns ──────────────────────────────────────────────────────
+  const cols = show.map(d => {
+    const r = swellRange(d);
+    // Wind arrows: show AM, MID, PM directions
+    const windSlots = d.wind.map(windAvg);
+
+    const windArrows = windSlots.map(w => {
+      if (!w) return '<span style="color:#555">-</span>';
+      return `<span style="display:inline-block;transform:rotate(${w.dir + 180}deg);font-size:12px;line-height:1;color:var(--text-secondary)">↓</span>`;
+    }).join('');
+
+    // Color bar segments (AM, MID, PM)
+    const swellBars = d.swell.map(s =>
+      `<div style="flex:1;height:6px;border-radius:3px;background:${swellBarColor(s)}"></div>`
+    ).join('');
+    const windBars = d.wind.map(w =>
+      `<div style="flex:1;height:6px;border-radius:3px;background:${windBarColor(w)}"></div>`
+    ).join('');
+
+    const isActive = d.date.toDateString() === now.toDateString();
+    const highlight = isActive ? 'background:rgba(30,144,255,0.08);' : '';
+
+    return `<div style="flex:1;min-width:0;text-align:center;padding:8px 2px;${highlight}border-right:1px solid var(--border);font-family:monospace">
+      <div style="font-size:10px;font-weight:bold;color:var(--text-primary);white-space:nowrap">${dayLabel(d)}</div>
+      <div style="font-size:8px;color:var(--text-muted);margin-bottom:6px">${dateLabel(d)}</div>
+      <div style="font-size:14px;font-weight:bold;color:var(--text-primary);margin-bottom:4px;white-space:nowrap">${rangeText(r)}</div>
+      <div style="display:flex;justify-content:center;gap:1px;margin-bottom:6px">${windArrows}</div>
+      <div style="display:flex;gap:2px;margin-bottom:3px">${swellBars}</div>
+      <div style="display:flex;gap:2px">${windBars}</div>
     </div>`;
   }).join('');
 
-  setHTML('7day-body',
-    swellLegend + swellChart
-    + windLegend + windChart
-    + tableHeader + tableRows
-    + `<div class="buoy-source" style="margin-top:8px"><a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener" class="src-link">Open-Meteo Marine + Weather API ↗</a></div>`);
+  // ── Legend for color bars ───────────────────────────────────────────────
+  const legend = `<div style="display:flex;justify-content:space-between;margin-top:8px;font-size:9px;color:var(--text-muted);font-family:monospace">
+    <div style="display:flex;align-items:center;gap:4px">
+      <span style="width:6px;height:6px;border-radius:3px;background:#00c853;display:inline-block"></span>
+      <span style="width:6px;height:6px;border-radius:3px;background:#ffeb3b;display:inline-block"></span>
+      <span style="width:6px;height:6px;border-radius:3px;background:#ff9800;display:inline-block"></span>
+      <span style="width:6px;height:6px;border-radius:3px;background:#f44336;display:inline-block"></span>
+      <span style="margin-left:2px">Swell (top) / Wind (bottom)</span>
+    </div>
+  </div>`;
+
+  setHTML('7day-body', `
+    <div style="display:flex;overflow-x:auto;border:1px solid var(--border);border-radius:8px;-webkit-overflow-scrolling:touch">${cols}</div>
+    ${legend}
+    <div class="buoy-source" style="margin-top:8px"><a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener" class="src-link">Open-Meteo Marine + Weather API ↗</a></div>`);
 }
 
 // ─── Refresh all ──────────────────────────────────────────────────────────────
