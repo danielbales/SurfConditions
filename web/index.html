@@ -42,126 +42,144 @@
 <main>
 
   <!-- ═══ CURRENT CONDITIONS ═══════════════════════════════════════════════ -->
+  <div class="section">
+    <div class="section-header" onclick="toggleSection(this)">
+      <span class="section-title">Current Conditions</span>
+      <span class="section-chevron">&#x25B2;</span>
+    </div>
+    <div class="section-body">
 
-  <!-- Surf Quality Rating -->
-  <div class="card" id="card-quality">
-    <div class="card-header">
-      <div class="card-title"><span class="icon">🏄</span> Surf Quality</div>
-      <div class="card-badge" id="quality-badge" style="background:rgba(155,155,155,0.15);color:var(--text-muted)">--</div>
-    </div>
-    <div class="card-body" id="quality-body">
-      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-    </div>
-  </div>
-
-  <!-- Wave Observations (Open-Meteo Marine current) -->
-  <div class="card" id="card-buoy">
-    <div class="card-header">
-      <div class="card-title"><span class="icon">📡</span> Wave Observations</div>
-      <div class="card-badge" id="buoy-badge" style="background:rgba(0,212,170,0.15);color:#00d4aa">MODEL</div>
-    </div>
-    <div class="card-body" id="buoy-body">
-      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-    </div>
-  </div>
-
-  <!-- Wind -->
-  <div class="card" id="card-wind">
-    <div class="card-header">
-      <div class="card-title"><span class="icon">💨</span> Wind</div>
-      <div class="card-badge" id="wind-badge" style="background:rgba(0,200,83,0.15);color:#00c853">CALM</div>
-    </div>
-    <div class="card-body" id="wind-body">
-      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-    </div>
-  </div>
-
-  <!-- Tides (US only — hidden until US spot loaded) -->
-  <div class="card" id="card-tides" style="display:none">
-    <div class="card-header">
-      <div class="card-title"><span class="icon">🌊</span> Tides</div>
-      <div class="card-badge" style="background:rgba(155,109,255,0.15);color:#9b6dff">NOAA</div>
-    </div>
-    <div class="card-body" id="tides-body">
-      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-    </div>
-  </div>
-
-  <!-- Water Temperature + UV Index (shared row) -->
-  <div class="card-row" style="display:flex;gap:12px">
-    <div class="card" id="card-water-temp" style="flex:1;min-width:0">
-      <div class="card-header">
-        <div class="card-title"><span class="icon">💧</span> Water Temp</div>
-        <div class="card-badge" id="water-temp-badge" style="background:rgba(30,144,255,0.15);color:#1e90ff">--</div>
+      <!-- Surf Quality Rating -->
+      <div class="card" id="card-quality">
+        <div class="card-header">
+          <div class="card-title"><span class="icon">🏄</span> Surf Quality</div>
+          <div class="card-badge" id="quality-badge" style="background:rgba(155,155,155,0.15);color:var(--text-muted)">--</div>
+        </div>
+        <div class="card-body" id="quality-body">
+          <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+        </div>
       </div>
-      <div class="card-body" id="water-temp-body">
-        <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+
+      <!-- Wave Observations (Open-Meteo Marine current) -->
+      <div class="card" id="card-buoy">
+        <div class="card-header">
+          <div class="card-title"><span class="icon">📡</span> Wave Observations</div>
+          <div class="card-badge" id="buoy-badge" style="background:rgba(0,212,170,0.15);color:#00d4aa">MODEL</div>
+        </div>
+        <div class="card-body" id="buoy-body">
+          <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+        </div>
       </div>
-    </div>
-    <div class="card" id="card-uv" style="flex:1;min-width:0">
-      <div class="card-header">
-        <div class="card-title"><span class="icon">☀️</span> UV Index</div>
-        <div class="card-badge" id="uv-badge" style="background:rgba(0,200,83,0.15);color:#00c853">--</div>
+
+      <!-- Wind -->
+      <div class="card" id="card-wind">
+        <div class="card-header">
+          <div class="card-title"><span class="icon">💨</span> Wind</div>
+          <div class="card-badge" id="wind-badge" style="background:rgba(0,200,83,0.15);color:#00c853">CALM</div>
+        </div>
+        <div class="card-body" id="wind-body">
+          <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+        </div>
       </div>
-      <div class="card-body" id="uv-body">
-        <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+
+      <!-- Tides (US only — hidden until US spot loaded) -->
+      <div class="card" id="card-tides" style="display:none">
+        <div class="card-header">
+          <div class="card-title"><span class="icon">🌊</span> Tides</div>
+          <div class="card-badge" style="background:rgba(155,109,255,0.15);color:#9b6dff">NOAA</div>
+        </div>
+        <div class="card-body" id="tides-body">
+          <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+        </div>
       </div>
+
+      <!-- Water Temperature + UV Index (shared row) -->
+      <div class="card-row" style="display:flex;gap:12px">
+        <div class="card" id="card-water-temp" style="flex:1;min-width:0">
+          <div class="card-header">
+            <div class="card-title"><span class="icon">💧</span> Water Temp</div>
+            <div class="card-badge" id="water-temp-badge" style="background:rgba(30,144,255,0.15);color:#1e90ff">--</div>
+          </div>
+          <div class="card-body" id="water-temp-body">
+            <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+          </div>
+        </div>
+        <div class="card" id="card-uv" style="flex:1;min-width:0">
+          <div class="card-header">
+            <div class="card-title"><span class="icon">☀️</span> UV Index</div>
+            <div class="card-badge" id="uv-badge" style="background:rgba(0,200,83,0.15);color:#00c853">--</div>
+          </div>
+          <div class="card-body" id="uv-body">
+            <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
   <!-- ═══ FORECASTS ═══════════════════════════════════════════════════════ -->
+  <div class="section">
+    <div class="section-header" onclick="toggleSection(this)">
+      <span class="section-title">Forecast</span>
+      <span class="section-chevron">&#x25B2;</span>
+    </div>
+    <div class="section-body">
 
-  <!-- 7-Day Outlook -->
-  <div class="card" id="card-7day">
-    <div class="card-header">
-      <div class="card-title"><span class="icon">📅</span> 7-Day Outlook</div>
-      <div class="card-badge" style="background:rgba(155,109,255,0.15);color:#9b6dff">EXTENDED</div>
-    </div>
-    <div class="card-body" id="7day-body">
-      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-    </div>
-  </div>
+      <!-- 7-Day Outlook -->
+      <div class="card" id="card-7day">
+        <div class="card-header">
+          <div class="card-title"><span class="icon">📅</span> 7-Day Outlook</div>
+          <div class="card-badge" style="background:rgba(155,109,255,0.15);color:#9b6dff">EXTENDED</div>
+        </div>
+        <div class="card-body" id="7day-body">
+          <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+        </div>
+      </div>
 
-  <!-- Swell Forecast -->
-  <div class="card" id="card-swell">
-    <div class="card-header">
-      <div class="card-title"><span class="icon">🌊</span> Swell Forecast</div>
-      <div class="card-badge" style="background:rgba(30,144,255,0.15);color:#1e90ff">OPEN-METEO</div>
-    </div>
-    <div class="card-body" id="swell-body">
-      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-    </div>
-  </div>
+      <!-- Swell Forecast -->
+      <div class="card" id="card-swell">
+        <div class="card-header">
+          <div class="card-title"><span class="icon">🌊</span> Swell Forecast</div>
+          <div class="card-badge" style="background:rgba(30,144,255,0.15);color:#1e90ff">OPEN-METEO</div>
+        </div>
+        <div class="card-body" id="swell-body">
+          <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+        </div>
+      </div>
 
-  <!-- Wind Forecast -->
-  <div class="card" id="card-wind-forecast">
-    <div class="card-header">
-      <div class="card-title"><span class="icon">📈</span> Wind Forecast</div>
-      <div class="card-badge" style="background:rgba(0,200,83,0.15);color:#00c853">48H</div>
-    </div>
-    <div class="card-body" id="wind-forecast-body">
-      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-    </div>
-  </div>
+      <!-- Wind Forecast -->
+      <div class="card" id="card-wind-forecast">
+        <div class="card-header">
+          <div class="card-title"><span class="icon">📈</span> Wind Forecast</div>
+          <div class="card-badge" style="background:rgba(0,200,83,0.15);color:#00c853">48H</div>
+        </div>
+        <div class="card-body" id="wind-forecast-body">
+          <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+        </div>
+      </div>
 
-  <!-- Sun & Moon -->
-  <div class="card" id="card-sun-moon">
-    <div class="card-header">
-      <div class="card-title"><span class="icon">☀️</span> Sun & Moon</div>
-    </div>
-    <div class="card-body" id="sun-moon-body">
-      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-    </div>
-  </div>
+      <!-- Sun & Moon -->
+      <div class="card" id="card-sun-moon">
+        <div class="card-header">
+          <div class="card-title"><span class="icon">☀️</span> Sun & Moon</div>
+        </div>
+        <div class="card-body" id="sun-moon-body">
+          <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+        </div>
+      </div>
 
-  <!-- Marine Forecast (US only) -->
-  <div class="card" id="card-marine" style="display:none">
-    <div class="card-header">
-      <div class="card-title"><span class="icon">⚓</span> Marine Forecast</div>
-      <div class="card-badge" style="background:rgba(30,144,255,0.15);color:#1e90ff">NWS</div>
-    </div>
-    <div class="card-body" id="marine-body">
-      <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+      <!-- Marine Forecast (US only) -->
+      <div class="card" id="card-marine" style="display:none">
+        <div class="card-header">
+          <div class="card-title"><span class="icon">⚓</span> Marine Forecast</div>
+          <div class="card-badge" style="background:rgba(30,144,255,0.15);color:#1e90ff">NWS</div>
+        </div>
+        <div class="card-body" id="marine-body">
+          <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+        </div>
+      </div>
+
     </div>
   </div>
 
