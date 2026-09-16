@@ -798,3 +798,133 @@ main {
   display: inline-block;
   opacity: 0.6;
 }
+
+/* ─── Onboarding / Spot Editor Overlay ──────────────────────────────────── */
+.onboarding-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 14, 29, 0.98);
+  z-index: 1000;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 0 0 env(safe-area-inset-bottom);
+  padding-top: env(safe-area-inset-top);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.onboarding-inner {
+  width: 100%;
+  max-width: 440px;
+  padding: 32px 20px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.onboarding-logo { font-size: 48px; text-align: center; margin-bottom: 8px; }
+.onboarding-title {
+  font-size: 26px; font-weight: 700;
+  color: var(--text-primary);
+  text-align: center;
+  letter-spacing: -0.5px;
+  margin-bottom: 6px;
+}
+.onboarding-sub {
+  font-size: 13px; color: var(--text-muted);
+  text-align: center; margin-bottom: 24px;
+}
+
+.search-wrap { position: relative; margin-bottom: 8px; }
+.spot-search-input {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--text-primary);
+  font-size: 15px;
+  padding: 13px 16px;
+  outline: none;
+  transition: border-color 0.2s;
+  -webkit-appearance: none;
+}
+.spot-search-input::placeholder { color: var(--text-muted); }
+.spot-search-input:focus { border-color: var(--accent-teal); }
+
+.search-status { font-size: 11px; color: var(--text-muted); padding: 4px 4px 6px; min-height: 20px; }
+.search-results { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+.search-result-btn {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; text-align: left;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 11px 14px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  color: var(--text-primary);
+}
+.search-result-btn:active { background: var(--bg-card2); border-color: var(--accent-teal); }
+.search-result-icon { font-size: 16px; flex-shrink: 0; }
+.search-result-text { font-size: 13px; color: var(--text-primary); line-height: 1.3; }
+
+.search-adding {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; color: var(--text-secondary);
+  padding: 10px 4px;
+}
+.search-adding-spinner {
+  width: 14px; height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent-teal);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+.added-label {
+  font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.8px;
+  color: var(--text-muted); margin: 16px 0 8px;
+}
+.added-spots-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 24px; }
+.added-spot-item {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px; padding: 10px 12px;
+}
+.added-spot-flag { font-size: 18px; flex-shrink: 0; }
+.added-spot-info { flex: 1; min-width: 0; }
+.added-spot-name {
+  display: block; font-size: 13px; font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.added-spot-meta { display: block; font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+.remove-spot-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-muted);
+  width: 24px; height: 24px;
+  font-size: 14px; cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s;
+}
+.remove-spot-btn:active { background: rgba(244,67,54,0.15); color: #f44336; border-color: #f44336; }
+.spots-hint { font-size: 10px; color: var(--text-muted); text-align: center; padding: 4px 0 0; }
+
+.onboarding-btn {
+  width: 100%;
+  background: var(--accent-teal);
+  border: none; border-radius: 14px;
+  color: #0a1628; font-size: 15px; font-weight: 700;
+  padding: 15px; cursor: pointer;
+  transition: opacity 0.2s; letter-spacing: 0.2px;
+}
+.onboarding-btn:disabled { opacity: 0.35; cursor: default; }
+.onboarding-btn:not(:disabled):active { opacity: 0.8; }
