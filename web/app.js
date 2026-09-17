@@ -511,17 +511,22 @@ async function loadBuoy() {
         const ndbc = await fetchNDBC(ACTIVE.buoyId);
         const wv = ndbc.wave;
         const sw = ndbc.swell;
-        wvhtFt = wv.height_m !== null ? (wv.height_m * 3.28084).toFixed(1) : '—';
-        dpd    = wv.period_s !== null ? Math.round(wv.period_s) + '' : '—';
-        mwd    = wv.direction;
-        dirStr = mwd !== null ? degToCompass(mwd) : '—';
-        swHt   = sw && sw.height_m !== null ? (sw.height_m * 3.28084).toFixed(1) : '—';
-        swPer  = sw && sw.period_s !== null ? Math.round(sw.period_s) + '' : '—';
-        swDir  = sw ? sw.direction : null;
-        sstC   = ndbc.waterTemp_c;
-        sstF   = sstC !== null && sstC !== undefined ? (sstC * 9/5 + 32).toFixed(0) : '—';
-        isObserved = true;
-        srcLink = `<a href="https://www.ndbc.noaa.gov/station_page.php?station=${ACTIVE.buoyId}" target="_blank" rel="noopener" class="src-link">NDBC Buoy ${ACTIVE.buoyId} · Observed ↗</a>`;
+        // Only use NDBC if it has actual wave data (not all MM/null)
+        if (wv.height_m !== null) {
+          wvhtFt = (wv.height_m * 3.28084).toFixed(1);
+          dpd    = wv.period_s !== null ? Math.round(wv.period_s) + '' : '—';
+          mwd    = wv.direction;
+          dirStr = mwd !== null ? degToCompass(mwd) : '—';
+          swHt   = sw && sw.height_m !== null ? (sw.height_m * 3.28084).toFixed(1) : '—';
+          swPer  = sw && sw.period_s !== null ? Math.round(sw.period_s) + '' : '—';
+          swDir  = sw ? sw.direction : null;
+          sstC   = ndbc.waterTemp_c;
+          sstF   = sstC !== null && sstC !== undefined ? (sstC * 9/5 + 32).toFixed(0) : '—';
+          isObserved = true;
+          srcLink = `<a href="https://www.ndbc.noaa.gov/station_page.php?station=${ACTIVE.buoyId}" target="_blank" rel="noopener" class="src-link">NDBC Buoy ${ACTIVE.buoyId} · Observed ↗</a>`;
+        } else {
+          console.warn('NDBC buoy wave data unavailable (MM), falling back to model');
+        }
 
         // Store wind for the wind card
         if (ndbc.wind && ndbc.wind.speed_ms !== null) {
@@ -881,7 +886,7 @@ async function loadSwell() {
       + `&hourly=wave_height,wave_period,wave_direction,wind_wave_height,wind_wave_direction,wind_wave_period,swell_wave_height,swell_wave_period,swell_wave_direction,secondary_swell_wave_height,secondary_swell_wave_period,secondary_swell_wave_direction`
       + `&wind_speed_unit=kn&length_unit=imperial&timezone=auto&forecast_days=7`;
     const [res, altRes] = await Promise.all([
-      fetch(`https://marine-api.open-meteo.com/v1/marine?${baseParams}&models=ecmwf_wam4`),
+      fetch(`https://marine-api.open-meteo.com/v1/marine?${baseParams}&models=ecmwf_wam025`),
       fetch(`https://marine-api.open-meteo.com/v1/marine?${baseParams}&models=ncep_gfswave025`).catch(() => null),
     ]);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
