@@ -489,8 +489,9 @@ function wetsuitRec(tempF) {
 }
 
 // ─── 1. Wave Observations (NDBC buoy → Open-Meteo fallback) ─────────────────
-// Stores latest NDBC wind for use by the wind card
+// Stores latest NDBC observations for accuracy tracking
 let _ndbcWind = null;
+let _ndbcWave = null;
 
 async function fetchNDBC(buoyId) {
   const res = await fetch(`${WORKER_URL}/proxy/ndbc/${buoyId}`);
@@ -504,6 +505,7 @@ async function loadBuoy() {
   try {
     let wvhtFt, dpd, mwd, dirStr, swHt, swPer, swDir, sstF, sstC, srcLink, isObserved;
     _ndbcWind = null;
+    _ndbcWave = null;
 
     // Try NDBC buoy first for real observations
     if (ACTIVE.buoyId) {
@@ -516,6 +518,12 @@ async function loadBuoy() {
           wvhtFt = (wv.height_m * 3.28084).toFixed(1);
           dpd    = wv.period_s !== null ? Math.round(wv.period_s) + '' : '—';
           mwd    = wv.direction;
+
+          // Store for accuracy tracking
+          _ndbcWave = {
+            heightFt: wv.height_m * 3.28084,
+            period: wv.period_s,
+          };
           dirStr = mwd !== null ? degToCompass(mwd) : '—';
           swHt   = sw && sw.height_m !== null ? (sw.height_m * 3.28084).toFixed(1) : '—';
           swPer  = sw && sw.period_s !== null ? Math.round(sw.period_s) + '' : '—';
@@ -1021,9 +1029,11 @@ async function loadSwell() {
       <span><span style="display:inline-block;width:14px;height:0;border-top:1.5px dashed #00d4aa;vertical-align:middle;margin-right:3px"></span>Swell (ft)</span>
     </div>`;
 
-    // Forecast accuracy - pass actual observed values when available
+    // Forecast accuracy - use buoy observations when available, not model data
+    const actualWvHt = _ndbcWave ? _ndbcWave.heightFt : null;
+    const actualPer  = _ndbcWave ? _ndbcWave.period : null;
     const actualWindSpd = _ndbcWind ? _ndbcWind.speedKts : null;
-    const accuracy = checkForecastAccuracy(ACTIVE.id, wvHt, wvPer, actualWindSpd);
+    const accuracy = checkForecastAccuracy(ACTIVE.id, actualWvHt, actualPer, actualWindSpd);
     storeForecastSnapshot(ACTIVE.id, pts, EXTENDED_DATA.wind);
 
     const accParts = [];
@@ -1033,7 +1043,7 @@ async function loadSwell() {
       if (accuracy.wind   !== null) accParts.push(`Wind ${accuracy.wind}%`);
     }
     const accuracyBadge = accParts.length
-      ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px">📊 ECMWF accuracy: ${accParts.join(' · ')} (${accuracy.samples} samples)</div>`
+      ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px">📊 Forecast vs buoy: ${accParts.join(' · ')} (${accuracy.samples} samples)</div>`
       : '';
 
     const spreadBadge = modelSpread
