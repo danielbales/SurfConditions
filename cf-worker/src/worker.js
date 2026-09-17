@@ -273,6 +273,96 @@ export default {
       return respond('ok', 200, null);
     }
 
+    // GET /proxy/ndbc/:buoyId — public NDBC realtime data proxy (no origin restriction)
+    if (request.method === 'GET' && url.pathname.startsWith('/proxy/ndbc/')) {
+      const buoyId = url.pathname.split('/')[3];
+      if (!buoyId || !/^\d+$/.test(buoyId)) {
+        return respond(JSON.stringify({ ok: false, error: 'Invalid buoy ID' }), 400, '*', {
+          'Content-Type': 'application/json',
+        });
+      }
+
+      try {
+        const [metRes, specRes] = await Promise.all([
+          fetch(`https://www.ndbc.noaa.gov/data/realtime2/${buoyId}.txt`),
+          fetch(`https://www.ndbc.noaa.gov/data/realtime2/${buoyId}.spec`),
+        ]);
+
+        if (!metRes.ok) {
+          return respond(JSON.stringify({ ok: false, error: `NDBC met fetch failed: ${metRes.status}` }), 502, '*', {
+            'Content-Type': 'application/json',
+          });
+        }
+
+        // Parse standard met file
+        const metText = await metRes.text();
+        const metLines = metText.trim().split('\n');
+        // First two lines are headers (start with #), data starts at line index 2
+        if (metLines.length < 3) {
+          return respond(JSON.stringify({ ok: false, error: 'No met data available' }), 502, '*', {
+            'Content-Type': 'application/json',
+          });
+        }
+        const metCols = metLines[2].trim().split(/\s+/);
+        // Columns: YY MM DD hh mm WDIR WSPD GST WVHT DPD APD MWD PRES ATMP WTMP DEWP VIS PTDY TIDE
+        const mm = (v) => (v === 'MM' ? null : parseFloat(v));
+        const metYear = metCols[0];
+        const metMonth = metCols[1];
+        const metDay = metCols[2];
+        const metHour = metCols[3];
+        const metMin = metCols[4];
+        const time = `${metYear}-${metMonth}-${metDay}T${metHour}:${metMin}:00Z`;
+
+        const wdir = mm(metCols[5]);
+        const wspd = mm(metCols[6]);
+        const gst  = mm(metCols[7]);
+        const wvht = mm(metCols[8]);
+        const dpd  = mm(metCols[9]);
+        const mwd  = mm(metCols[11]);
+        const wtmp = mm(metCols[14]);
+
+        // Parse spectral file
+        let swell = null;
+        let windWave = null;
+        if (specRes.ok) {
+          const specText = await specRes.text();
+          const specLines = specText.trim().split('\n');
+          if (specLines.length >= 3) {
+            const specCols = specLines[2].trim().split(/\s+/);
+            // Columns: YY MM DD hh mm WVHT SwH SwP SwD WWH WWP WWD STEEPNESS APD MWD
+            const swH  = mm(specCols[6]);
+            const swP  = mm(specCols[7]);
+            const swD  = mm(specCols[8]);
+            const wwH  = mm(specCols[9]);
+            const wwP  = mm(specCols[10]);
+            const wwD  = mm(specCols[11]);
+            swell    = { height_m: swH, period_s: swP, direction: swD };
+            windWave = { height_m: wwH, period_s: wwP, direction: wwD };
+          }
+        }
+
+        const result = {
+          ok: true,
+          buoyId,
+          time,
+          wave: { height_m: wvht, period_s: dpd, direction: mwd },
+          swell,
+          windWave,
+          wind: { speed_ms: wspd, gust_ms: gst, direction: wdir },
+          waterTemp_c: wtmp,
+        };
+
+        return respond(JSON.stringify(result), 200, '*', {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'public, max-age=600',
+        });
+      } catch (e) {
+        return respond(JSON.stringify({ ok: false, error: e.message }), 500, '*', {
+          'Content-Type': 'application/json',
+        });
+      }
+    }
+
     return respond('Not Found', 404, origin);
   },
 

@@ -79,11 +79,11 @@ let ACTIVE = null;
 let pendingSpots = []; // working copy while editor is open
 
 const DEFAULT_SPOTS = [
-  { id: 'carmel',   name: 'Carmel Beach',  lat: 36.5535, lng: -121.9255, beachFacing: 280, isUS: true, tideStation: '9413450', marineZone: 'PZZ535', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/91,48/forecast' },
-  { id: 'asilomar', name: 'Asilomar',       lat: 36.6213, lng: -121.9427, beachFacing: 285, isUS: true, tideStation: '9413450', marineZone: 'PZZ535', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/91,51/forecast' },
-  { id: 'bigsur',   name: 'Big Sur',        lat: 36.2344, lng: -121.8173, beachFacing: 270, isUS: true, tideStation: '9413450', marineZone: 'PZZ565', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/92,33/forecast' },
-  { id: 'steamer',  name: 'Steamer Lane',   lat: 36.9516, lng: -122.0255, beachFacing: 210, isUS: true, tideStation: '9413450', marineZone: 'PZZ535', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/91,66/forecast' },
-  { id: 'mosslanding', name: 'Moss Landing', lat: 36.8035, lng: -121.7909, beachFacing: 265, isUS: true, tideStation: '9413450', marineZone: 'PZZ535', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/98,58/forecast' },
+  { id: 'carmel',   name: 'Carmel Beach',  lat: 36.5535, lng: -121.9255, beachFacing: 280, isUS: true, buoyId: '46042', tideStation: '9413450', marineZone: 'PZZ535', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/91,48/forecast' },
+  { id: 'asilomar', name: 'Asilomar',       lat: 36.6213, lng: -121.9427, beachFacing: 285, isUS: true, buoyId: '46042', tideStation: '9413450', marineZone: 'PZZ535', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/91,51/forecast' },
+  { id: 'bigsur',   name: 'Big Sur',        lat: 36.2344, lng: -121.8173, beachFacing: 270, isUS: true, buoyId: '46042', tideStation: '9413450', marineZone: 'PZZ565', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/92,33/forecast' },
+  { id: 'steamer',  name: 'Steamer Lane',   lat: 36.9516, lng: -122.0255, beachFacing: 210, isUS: true, buoyId: '46042', tideStation: '9413450', marineZone: 'PZZ535', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/91,66/forecast' },
+  { id: 'mosslanding', name: 'Moss Landing', lat: 36.8035, lng: -121.7909, beachFacing: 265, isUS: true, buoyId: '46042', tideStation: '9413450', marineZone: 'PZZ535', cwfOffice: 'MTR', forecastUrl: 'https://api.weather.gov/gridpoints/MTR/98,58/forecast' },
 ];
 
 // Beach facing for the active spot. Saved spots from before this feature (and
@@ -488,45 +488,94 @@ function wetsuitRec(tempF) {
   return { icon: '🧊', label: 'Full suit + hood + boots (6/5mm)' };
 }
 
-// ─── 1. Wave Observations (Open-Meteo Marine current) ────────────────────────
+// ─── 1. Wave Observations (NDBC buoy → Open-Meteo fallback) ─────────────────
+// Stores latest NDBC wind for use by the wind card
+let _ndbcWind = null;
+
+async function fetchNDBC(buoyId) {
+  const res = await fetch(`${WORKER_URL}/proxy/ndbc/${buoyId}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const d = await res.json();
+  if (!d.ok) throw new Error(d.error || 'NDBC unavailable');
+  return d;
+}
+
 async function loadBuoy() {
   try {
-    const currentVars = 'wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_direction,swell_wave_period';
-    const hourlyVars  = 'sea_surface_temperature';
-    const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${LAT()}&longitude=${LNG()}`
-      + `&current=${currentVars}&hourly=${hourlyVars}`
-      + `&length_unit=imperial&timezone=auto&forecast_days=1`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const d = await res.json();
+    let wvhtFt, dpd, mwd, dirStr, swHt, swPer, swDir, sstF, sstC, srcLink, isObserved;
+    _ndbcWind = null;
 
-    const c = d.current;
-    const wvhtFt = c.wave_height?.toFixed(1) ?? '—';
-    const dpd    = c.wave_period?.toFixed(0) ?? '—';
-    const mwd    = c.wave_direction ?? null;
-    const dirStr = mwd !== null ? degToCompass(mwd) : '—';
-    const swHt   = c.swell_wave_height?.toFixed(1) ?? '—';
-    const swPer  = c.swell_wave_period?.toFixed(0) ?? '—';
-    const swDir  = c.swell_wave_direction ?? null;
+    // Try NDBC buoy first for real observations
+    if (ACTIVE.buoyId) {
+      try {
+        const ndbc = await fetchNDBC(ACTIVE.buoyId);
+        const wv = ndbc.wave;
+        const sw = ndbc.swell;
+        wvhtFt = wv.height_m !== null ? (wv.height_m * 3.28084).toFixed(1) : '—';
+        dpd    = wv.period_s !== null ? Math.round(wv.period_s) + '' : '—';
+        mwd    = wv.direction;
+        dirStr = mwd !== null ? degToCompass(mwd) : '—';
+        swHt   = sw && sw.height_m !== null ? (sw.height_m * 3.28084).toFixed(1) : '—';
+        swPer  = sw && sw.period_s !== null ? Math.round(sw.period_s) + '' : '—';
+        swDir  = sw ? sw.direction : null;
+        sstC   = ndbc.waterTemp_c;
+        sstF   = sstC !== null && sstC !== undefined ? (sstC * 9/5 + 32).toFixed(0) : '—';
+        isObserved = true;
+        srcLink = `<a href="https://www.ndbc.noaa.gov/station_page.php?station=${ACTIVE.buoyId}" target="_blank" rel="noopener" class="src-link">NDBC Buoy ${ACTIVE.buoyId} · Observed ↗</a>`;
 
-    const now = new Date();
-    const hours = d.hourly.time;
-    let sstC = null;
-    for (let i = 0; i < hours.length; i++) {
-      if (new Date(hours[i]) <= now) sstC = d.hourly.sea_surface_temperature[i];
+        // Store wind for the wind card
+        if (ndbc.wind && ndbc.wind.speed_ms !== null) {
+          _ndbcWind = {
+            speedKts: ndbc.wind.speed_ms * 1.94384,
+            gustKts:  ndbc.wind.gust_ms !== null ? ndbc.wind.gust_ms * 1.94384 : null,
+            dir:      ndbc.wind.direction,
+          };
+        }
+      } catch (e) {
+        console.warn('NDBC fetch failed, falling back to Open-Meteo:', e.message);
+      }
     }
-    const sstF = sstC !== null && sstC !== undefined ? (sstC * 9/5 + 32).toFixed(0) : '—';
 
-    const srcLink = ACTIVE.buoyId
-      ? `<a href="https://www.ndbc.noaa.gov/station_page.php?station=${ACTIVE.buoyId}" target="_blank" rel="noopener" class="src-link">NDBC Buoy ${ACTIVE.buoyId} ↗</a>`
-      : `<a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener" class="src-link">Open-Meteo Marine API ↗</a>`;
+    // Fall back to Open-Meteo model if NDBC unavailable
+    if (!isObserved) {
+      const currentVars = 'wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_direction,swell_wave_period';
+      const hourlyVars  = 'sea_surface_temperature';
+      const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${LAT()}&longitude=${LNG()}`
+        + `&current=${currentVars}&hourly=${hourlyVars}`
+        + `&length_unit=imperial&timezone=auto&forecast_days=1`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const d = await res.json();
+      const c = d.current;
+      wvhtFt = c.wave_height?.toFixed(1) ?? '—';
+      dpd    = c.wave_period?.toFixed(0) ?? '—';
+      mwd    = c.wave_direction ?? null;
+      dirStr = mwd !== null ? degToCompass(mwd) : '—';
+      swHt   = c.swell_wave_height?.toFixed(1) ?? '—';
+      swPer  = c.swell_wave_period?.toFixed(0) ?? '—';
+      swDir  = c.swell_wave_direction ?? null;
+      const now = new Date();
+      const hours = d.hourly.time;
+      sstC = null;
+      for (let i = 0; i < hours.length; i++) {
+        if (new Date(hours[i]) <= now) sstC = d.hourly.sea_surface_temperature[i];
+      }
+      sstF = sstC !== null && sstC !== undefined ? (sstC * 9/5 + 32).toFixed(0) : '—';
+      isObserved = false;
+      srcLink = `<a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener" class="src-link">Open-Meteo Marine API ↗</a>`;
+    }
+
+    const sourceTag = isObserved ? 'Observed (NDBC buoy)' : 'Model estimate';
+    setBadge('buoy-badge', isObserved ? 'BUOY' : 'MODEL',
+      isObserved ? '#00d4aa' : '#7eb8d4',
+      isObserved ? 'rgba(0,212,170,0.15)' : 'rgba(126,184,212,0.15)');
 
     setHTML('buoy-body', `
       <div class="stat-row">
         <span class="stat-value" style="color:#00d4aa">${wvhtFt}</span>
         ${wvhtFt !== '—' ? '<span class="stat-unit">ft</span>' : ''}
       </div>
-      <div class="stat-label">Significant Wave Height (model)</div>
+      <div class="stat-label">${sourceTag}</div>
       <div class="stats-grid-3">
         <div class="stat-cell">
           <div class="label">Period</div>
@@ -827,12 +876,22 @@ function renderQuality() {
 // ─── 2. Open-Meteo Marine (Swell Forecast) ────────────────────────────────────
 async function loadSwell() {
   try {
-    const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${LAT()}&longitude=${LNG()}`
+    // Fetch primary model (ECMWF WAM4) and secondary model (NCEP GFS Wave) in parallel
+    const baseParams = `latitude=${LAT()}&longitude=${LNG()}`
       + `&hourly=wave_height,wave_period,wave_direction,wind_wave_height,wind_wave_direction,wind_wave_period,swell_wave_height,swell_wave_period,swell_wave_direction,secondary_swell_wave_height,secondary_swell_wave_period,secondary_swell_wave_direction`
-      + `&wind_speed_unit=kn&length_unit=imperial&timezone=auto&forecast_days=7&models=best_match`;
-    const res = await fetch(url);
+      + `&wind_speed_unit=kn&length_unit=imperial&timezone=auto&forecast_days=7`;
+    const [res, altRes] = await Promise.all([
+      fetch(`https://marine-api.open-meteo.com/v1/marine?${baseParams}&models=ecmwf_wam4`),
+      fetch(`https://marine-api.open-meteo.com/v1/marine?${baseParams}&models=ncep_gfswave025`).catch(() => null),
+    ]);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const d = await res.json();
+
+    // Parse secondary model (for confidence spread)
+    let altData = null;
+    try {
+      if (altRes?.ok) altData = await altRes.json();
+    } catch (e) {}
 
     const now = new Date();
     const hours = d.hourly.time;
@@ -853,6 +912,25 @@ async function loadSwell() {
     const sw2Ht  = d.hourly.secondary_swell_wave_height?.[idx] ?? null;
     const sw2Per = d.hourly.secondary_swell_wave_period?.[idx] ?? null;
     const sw2Dir = d.hourly.secondary_swell_wave_direction?.[idx] ?? null;
+
+    // Model spread: compare ECMWF vs GFS at current hour
+    let modelSpread = null;
+    if (altData?.hourly?.wave_height) {
+      const altHours = altData.hourly.time;
+      let altIdx = 0;
+      for (let i = 0; i < altHours.length; i++) {
+        if (new Date(altHours[i]) <= now) altIdx = i;
+      }
+      const altWvHt = altData.hourly.wave_height[altIdx];
+      const altSwHt = altData.hourly.swell_wave_height?.[altIdx];
+      if (altWvHt != null && wvHt != null) {
+        const lo = Math.min(wvHt, altWvHt);
+        const hi = Math.max(wvHt, altWvHt);
+        const diff = Math.abs(wvHt - altWvHt);
+        const confidence = diff < 0.5 ? 'High' : diff < 1.5 ? 'Medium' : 'Low';
+        modelSpread = { lo, hi, diff, confidence };
+      }
+    }
 
     const dirStr   = degToCompass(wvDir);
     const swDirStr = degToCompass(swDir);
@@ -905,21 +983,30 @@ async function loadSwell() {
     const dirTable = `<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-family:monospace">Swell Outlook · ft &amp; period</div>
       <div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:6px">${dirRows}</div>`;
 
-    const srcLink = ACTIVE.buoyId
-      ? `<a href="https://www.ndbc.noaa.gov/station_page.php?station=${ACTIVE.buoyId}" target="_blank" rel="noopener" class="src-link">NDBC Buoy ${ACTIVE.buoyId} ↗</a>`
-      : `<a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener" class="src-link">Open-Meteo Marine API ↗</a>`;
+    const srcLink = `<a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener" class="src-link">ECMWF WAM4 via Open-Meteo ↗</a>`;
 
     const legend = `<div style="display:flex;gap:12px;margin-bottom:4px;font-size:9px;color:var(--text-muted);font-family:monospace">
       <span><span style="display:inline-block;width:14px;height:2px;background:#1e90ff;vertical-align:middle;margin-right:3px"></span>Wave (ft)</span>
       <span><span style="display:inline-block;width:14px;height:0;border-top:1.5px dashed #00d4aa;vertical-align:middle;margin-right:3px"></span>Swell (ft)</span>
     </div>`;
 
-    // Forecast accuracy
-    const accuracy = checkForecastAccuracy(ACTIVE.id, wvHt);
-    storeForecastSnapshot(ACTIVE.id, pts);
+    // Forecast accuracy - pass actual observed values when available
+    const actualWindSpd = _ndbcWind ? _ndbcWind.speedKts : null;
+    const accuracy = checkForecastAccuracy(ACTIVE.id, wvHt, wvPer, actualWindSpd);
+    storeForecastSnapshot(ACTIVE.id, pts, EXTENDED_DATA.wind);
 
-    const accuracyBadge = accuracy
-      ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px">📊 Model accuracy: ${accuracy.accuracy}% (${accuracy.samples} samples)</div>`
+    const accParts = [];
+    if (accuracy) {
+      if (accuracy.waveHt !== null) accParts.push(`Wave ${accuracy.waveHt}%`);
+      if (accuracy.period !== null) accParts.push(`Period ${accuracy.period}%`);
+      if (accuracy.wind   !== null) accParts.push(`Wind ${accuracy.wind}%`);
+    }
+    const accuracyBadge = accParts.length
+      ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px">📊 ECMWF accuracy: ${accParts.join(' · ')} (${accuracy.samples} samples)</div>`
+      : '';
+
+    const spreadBadge = modelSpread
+      ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px">🔀 Models: ${modelSpread.lo.toFixed(1)}-${modelSpread.hi.toFixed(1)}ft · ${modelSpread.confidence} confidence</div>`
       : '';
 
     setHTML('swell-body', `
@@ -932,7 +1019,7 @@ async function loadSwell() {
             <span class="stat-value" style="color:#1e90ff">${wvHt?.toFixed(1) ?? '—'}</span>
             <span class="stat-unit">ft</span>
           </div>
-          <div class="stat-label">${wvPer?.toFixed(0) ?? '—'}s period · from ${dirStr} (${wvDir}°)</div>
+          <div class="stat-label">${wvPer?.toFixed(0) ?? '—'}s period · from ${dirStr} (${wvDir}°) · ECMWF WAM4</div>
         </div>
       </div>
       ${swellAlignmentHTML(swDir, BEACH_FACING())}
@@ -942,6 +1029,7 @@ async function loadSwell() {
         { ht: wwHt, per: wwPer, dir: wwDir },
       ])}
       ${swellArrivalHTML(swPer)}
+      ${spreadBadge}
       ${accuracyBadge}
       <div class="divider"></div>
       ${legend}
@@ -975,7 +1063,12 @@ async function loadWeather() {
       if (new Date(hours[i]) <= now) idx = i;
     }
 
-    renderWind(d.hourly.wind_speed_10m[idx], d.hourly.wind_gusts_10m[idx], d.hourly.wind_direction_10m[idx]);
+    // Use NDBC observed wind for current if available, otherwise model
+    if (_ndbcWind && _ndbcWind.speedKts != null) {
+      renderWind(_ndbcWind.speedKts, _ndbcWind.gustKts, _ndbcWind.dir, true);
+    } else {
+      renderWind(d.hourly.wind_speed_10m[idx], d.hourly.wind_gusts_10m[idx], d.hourly.wind_direction_10m[idx], false);
+    }
     renderWindForecast(d.hourly, idx);
 
     const windPts = [];
@@ -1101,7 +1194,7 @@ function renderWindForecast(hourly, currentIdx) {
   setupWindChartInteraction(pts);
 }
 
-function renderWind(speedKts, gustKts, dir) {
+function renderWind(speedKts, gustKts, dir, isObserved) {
   const [cls, desc] = windClass(speedKts);
   const dirStr = degToCompass(dir);
 
@@ -1116,9 +1209,13 @@ function renderWind(speedKts, gustKts, dir) {
   const [bc, bb] = badgeColors[cls];
   setBadge('wind-badge', desc.toUpperCase(), bc, bb);
 
-  const srcLink = ACTIVE?.isUS
-    ? `<a href="https://forecast.weather.gov/MapClick.php?lat=${LAT()}&lon=${LNG()}" target="_blank" rel="noopener" class="src-link">NWS Point Forecast ↗</a>`
-    : `<a href="https://open-meteo.com/en/docs" target="_blank" rel="noopener" class="src-link">Open-Meteo Weather ↗</a>`;
+  const srcLink = isObserved
+    ? `<a href="https://www.ndbc.noaa.gov/station_page.php?station=${ACTIVE.buoyId}" target="_blank" rel="noopener" class="src-link">NDBC Buoy ${ACTIVE.buoyId} · Observed ↗</a>`
+    : ACTIVE?.isUS
+      ? `<a href="https://forecast.weather.gov/MapClick.php?lat=${LAT()}&lon=${LNG()}" target="_blank" rel="noopener" class="src-link">NWS Point Forecast ↗</a>`
+      : `<a href="https://open-meteo.com/en/docs" target="_blank" rel="noopener" class="src-link">Open-Meteo Weather ↗</a>`;
+
+  const sourceTag = isObserved ? 'Observed (NDBC buoy)' : 'Model estimate';
 
   setHTML('wind-body', `
     <div class="wind-dir-display">
@@ -1131,6 +1228,7 @@ function renderWind(speedKts, gustKts, dir) {
           <span class="unit">kts</span>
         </div>
         <div class="desc">from ${dirStr} (${dir}°) · Gusts ${gustKts?.toFixed(0) ?? '—'} kts</div>
+        <div class="desc" style="color:var(--text-muted)">${sourceTag}</div>
       </div>
     </div>
     <div class="stats-grid-3">
@@ -1167,14 +1265,26 @@ async function loadTides() {
       + `?begin_date=${fmtDate(today)}&end_date=${fmtDate(endDate)}&station=${NOAA_STATION()}`
       + `&datum=MLLW&time_zone=lst_ldt&units=english&application=web_services&format=json`;
 
-    const [hourlyRes, hiloRes] = await Promise.all([
+    const [hourlyRes, hiloRes, observedRes] = await Promise.all([
       fetch(base + '&product=predictions&interval=h'),
       fetch(base + '&product=predictions&interval=hilo'),
+      fetch(`https://api.tidesandcurrents.noaa.gov/api/prod/datagetter`
+        + `?date=latest&station=${NOAA_STATION()}&product=water_level&datum=MLLW`
+        + `&time_zone=lst_ldt&units=english&application=web_services&format=json`),
     ]);
     if (!hourlyRes.ok || !hiloRes.ok) throw new Error('HTTP error');
     const [hourlyData, hiloData] = await Promise.all([hourlyRes.json(), hiloRes.json()]);
     if (hourlyData.error) throw new Error(hourlyData.error.message);
     if (hiloData.error) throw new Error(hiloData.error.message);
+
+    // Parse observed water level (may fail - not critical)
+    let observedLevel = null;
+    try {
+      const obsData = await observedRes.json();
+      if (obsData.data?.length) {
+        observedLevel = parseFloat(obsData.data[obsData.data.length - 1].v);
+      }
+    } catch (e) {}
 
     // NOAA returns "YYYY-MM-DD HH:MM" — replace space with T for mobile compat
     const parseNoaaDate = s => new Date(s.replace(' ', 'T'));
@@ -1214,7 +1324,8 @@ async function loadTides() {
       + ` L ${pts[0][0].toFixed(1)},${(PT + chartH).toFixed(1)} Z`;
 
     const nowX = tx(now).toFixed(1);
-    const nowV = (() => {
+    // Use observed water level if available, otherwise interpolate from predictions
+    const predictedV = (() => {
       for (let i = 1; i < visible.length; i++) {
         if (visible[i].t >= now) {
           const frac = (now - visible[i-1].t) / (visible[i].t - visible[i-1].t);
@@ -1223,6 +1334,7 @@ async function loadTides() {
       }
       return visible[visible.length-1].v;
     })();
+    const nowV = observedLevel !== null ? observedLevel : predictedV;
     const nowY = ty(nowV).toFixed(1);
 
     const visibleEvents = events.filter(e => e.t >= tStart && e.t <= tEnd);
@@ -1295,9 +1407,10 @@ async function loadTides() {
     const toggleLabel = _tideRange === 'extended' ? '24h' : '48h';
     const toggleActive = _tideRange === 'extended' ? ' active' : '';
 
+    const tideSource = observedLevel !== null ? 'Observed' : 'Predicted';
     setHTML('tides-body', `
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-        <span style="font-size:18px;font-weight:700;color:#1e90ff">${nowV.toFixed(2)}<span style="font-size:11px;color:var(--text-muted)"> ft</span></span>
+        <span style="font-size:18px;font-weight:700;color:#1e90ff">${nowV.toFixed(2)}<span style="font-size:11px;color:var(--text-muted)"> ft ${tideSource.toLowerCase()}</span></span>
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:11px;color:var(--text-secondary)">${trend}</span>
           <button class="tide-toggle${toggleActive}" onclick="toggleTideRange()">${toggleLabel}</button>
@@ -1306,7 +1419,7 @@ async function loadTides() {
       ${svg}
       <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin:6px 0 4px">Today's Schedule</div>
       <div class="tide-schedule">${scheduleHTML || '<div class="error-msg">No events today</div>'}</div>
-      <div class="buoy-source" style="margin-top:6px"><a href="https://tidesandcurrents.noaa.gov/waterlevels.html?id=${NOAA_STATION()}" target="_blank" rel="noopener" class="src-link">NOAA Tides & Currents · Station ${NOAA_STATION()} ↗</a></div>
+      <div class="buoy-source" style="margin-top:6px"><a href="https://tidesandcurrents.noaa.gov/waterlevels.html?id=${NOAA_STATION()}" target="_blank" rel="noopener" class="src-link">NOAA Tides & Currents · ${tideSource} ↗</a></div>
     `);
   } catch (e) {
     setHTML('tides-body', errorHTML('Tide data unavailable: ' + e.message));
@@ -1585,39 +1698,70 @@ function swellArrivalHTML(period) {
 }
 
 // ─── Forecast Accuracy Tracking ──────────────────────────────────────────────
-function storeForecastSnapshot(spotId, swellPts) {
+function storeForecastSnapshot(spotId, swellPts, windPts) {
   if (!swellPts || swellPts.length < 7) return;
   try {
     const key = 'forecast_history_' + spotId;
     const history = JSON.parse(localStorage.getItem(key) || '[]');
-    history.push({
+    const entry = {
       storedAt: Date.now(),
       targetTime: swellPts[6].t.getTime(),
       forecastWvHt: swellPts[6].wvHt,
-    });
-    if (history.length > 20) history.splice(0, history.length - 20);
+      forecastPer:  swellPts[6].per,
+    };
+    // Attach wind forecast if available at same time index
+    if (windPts && windPts.length > 6) {
+      entry.forecastWindSpd = windPts[6].spd;
+    }
+    history.push(entry);
+    if (history.length > 30) history.splice(0, history.length - 30);
     localStorage.setItem(key, JSON.stringify(history));
   } catch (e) {}
 }
 
-function checkForecastAccuracy(spotId, actualWvHt) {
+function checkForecastAccuracy(spotId, actualWvHt, actualPer, actualWindSpd) {
   try {
     const key = 'forecast_history_' + spotId;
     const history = JSON.parse(localStorage.getItem(key) || '[]');
     const now = Date.now();
     const expired = history.filter(e => e.targetTime < now && e.targetTime > now - 7200000 && !e.verified);
-    if (!expired.length || actualWvHt == null) return null;
+    if (!expired.length) return null;
 
     const forecast = expired[expired.length - 1];
-    const pctError = forecast.forecastWvHt > 0
-      ? (Math.abs(forecast.forecastWvHt - actualWvHt) / forecast.forecastWvHt) * 100 : 0;
     forecast.verified = true;
-    forecast.accuracy = Math.max(0, 100 - pctError);
+
+    // Wave height accuracy
+    if (actualWvHt != null && forecast.forecastWvHt > 0) {
+      const pctErr = (Math.abs(forecast.forecastWvHt - actualWvHt) / forecast.forecastWvHt) * 100;
+      forecast.wvHtAccuracy = Math.max(0, 100 - pctErr);
+    }
+    // Period accuracy
+    if (actualPer != null && forecast.forecastPer > 0) {
+      const pctErr = (Math.abs(forecast.forecastPer - actualPer) / forecast.forecastPer) * 100;
+      forecast.perAccuracy = Math.max(0, 100 - pctErr);
+    }
+    // Wind speed accuracy
+    if (actualWindSpd != null && forecast.forecastWindSpd > 0) {
+      const pctErr = (Math.abs(forecast.forecastWindSpd - actualWindSpd) / forecast.forecastWindSpd) * 100;
+      forecast.windAccuracy = Math.max(0, 100 - pctErr);
+    }
+    // Backward compat
+    forecast.accuracy = forecast.wvHtAccuracy ?? null;
+
     localStorage.setItem(key, JSON.stringify(history));
 
-    const verified = history.filter(e => e.verified && e.accuracy != null);
+    const verified = history.filter(e => e.verified);
     if (!verified.length) return null;
-    return { accuracy: Math.round(verified.reduce((s, e) => s + e.accuracy, 0) / verified.length), samples: verified.length };
+
+    const avg = (arr) => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : null;
+    return {
+      waveHt: avg(verified.filter(e => e.wvHtAccuracy != null).map(e => e.wvHtAccuracy)),
+      period: avg(verified.filter(e => e.perAccuracy != null).map(e => e.perAccuracy)),
+      wind:   avg(verified.filter(e => e.windAccuracy != null).map(e => e.windAccuracy)),
+      samples: verified.length,
+      // Legacy compat
+      accuracy: avg(verified.filter(e => e.wvHtAccuracy != null).map(e => e.wvHtAccuracy)),
+    };
   } catch (e) { return null; }
 }
 
