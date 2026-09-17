@@ -892,12 +892,6 @@ async function loadSwell() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const d = await res.json();
 
-    // Parse secondary model (for confidence spread)
-    let altData = null;
-    try {
-      if (altRes?.ok) altData = await altRes.json();
-    } catch (e) {}
-
     const now = new Date();
     const hours = d.hourly.time;
     let idx = 0;
@@ -908,26 +902,54 @@ async function loadSwell() {
     const wvHt  = d.hourly.wave_height[idx];
     const wvPer = d.hourly.wave_period[idx];
     const wvDir = d.hourly.wave_direction[idx];
-    const swHt  = d.hourly.swell_wave_height[idx];
-    const swPer = d.hourly.swell_wave_period[idx];
-    const swDir = d.hourly.swell_wave_direction[idx];
-    const wwHt  = d.hourly.wind_wave_height[idx];
-    const wwPer = d.hourly.wind_wave_period[idx];
-    const wwDir = d.hourly.wind_wave_direction[idx];
-    const sw2Ht  = d.hourly.secondary_swell_wave_height?.[idx] ?? null;
-    const sw2Per = d.hourly.secondary_swell_wave_period?.[idx] ?? null;
-    const sw2Dir = d.hourly.secondary_swell_wave_direction?.[idx] ?? null;
+    let swHt  = d.hourly.swell_wave_height[idx];
+    let swPer = d.hourly.swell_wave_period[idx];
+    let swDir = d.hourly.swell_wave_direction[idx];
+    let wwHt  = d.hourly.wind_wave_height[idx];
+    let wwPer = d.hourly.wind_wave_period[idx];
+    let wwDir = d.hourly.wind_wave_direction[idx];
+    let sw2Ht  = d.hourly.secondary_swell_wave_height?.[idx] ?? null;
+    let sw2Per = d.hourly.secondary_swell_wave_period?.[idx] ?? null;
+    let sw2Dir = d.hourly.secondary_swell_wave_direction?.[idx] ?? null;
+
+    // ECMWF WAM 0.25 doesn't decompose into swell/wind-wave components.
+    // Use GFS (altData) for swell decomposition when primary returns null.
+    let altIdx = 0;
+    let altData = null;
+    try {
+      if (altRes?.ok) altData = await altRes.json();
+    } catch (e) {}
+
+    if (altData?.hourly?.time) {
+      const altHours = altData.hourly.time;
+      for (let i = 0; i < altHours.length; i++) {
+        if (new Date(altHours[i]) <= now) altIdx = i;
+      }
+    }
+
+    if (swHt == null && altData?.hourly?.swell_wave_height) {
+      swHt  = altData.hourly.swell_wave_height[altIdx] ?? null;
+      swPer = altData.hourly.swell_wave_period?.[altIdx] ?? null;
+      swDir = altData.hourly.swell_wave_direction?.[altIdx] ?? null;
+    }
+    if (wwHt == null && altData?.hourly?.wind_wave_height) {
+      wwHt  = altData.hourly.wind_wave_height?.[altIdx] ?? null;
+      wwPer = altData.hourly.wind_wave_period?.[altIdx] ?? null;
+      wwDir = altData.hourly.wind_wave_direction?.[altIdx] ?? null;
+    }
+    if (sw2Ht == null && altData?.hourly?.secondary_swell_wave_height) {
+      sw2Ht  = altData.hourly.secondary_swell_wave_height?.[altIdx] ?? null;
+      sw2Per = altData.hourly.secondary_swell_wave_period?.[altIdx] ?? null;
+      sw2Dir = altData.hourly.secondary_swell_wave_direction?.[altIdx] ?? null;
+    }
+
+    // Last resort: use total wave height as swell proxy
+    if (swHt == null) { swHt = wvHt; swPer = wvPer; swDir = wvDir; }
 
     // Model spread: compare ECMWF vs GFS at current hour
     let modelSpread = null;
     if (altData?.hourly?.wave_height) {
-      const altHours = altData.hourly.time;
-      let altIdx = 0;
-      for (let i = 0; i < altHours.length; i++) {
-        if (new Date(altHours[i]) <= now) altIdx = i;
-      }
       const altWvHt = altData.hourly.wave_height[altIdx];
-      const altSwHt = altData.hourly.swell_wave_height?.[altIdx];
       if (altWvHt != null && wvHt != null) {
         const lo = Math.min(wvHt, altWvHt);
         const hi = Math.max(wvHt, altWvHt);
@@ -943,16 +965,20 @@ async function loadSwell() {
     QSTATE.swell = { ht: swHt, per: swPer, dir: swDir };
     renderQuality();
 
+    // ── Helper: prefer ECMWF value, fall back to GFS, then total wave ──
+    const altH = altData?.hourly;
+    const sw = (field, i) => d.hourly[field]?.[i] ?? altH?.[field]?.[Math.min(i, (altH?.time?.length ?? 1) - 1)] ?? null;
+
     // ── Collect 48-hour forecast points ────────────────────────────────────
     const pts = [];
     for (let i = idx; i < hours.length && pts.length < 48; i++) {
       pts.push({
         t:    new Date(hours[i]),
         wvHt: d.hourly.wave_height[i] ?? 0,
-        swHt: d.hourly.swell_wave_height[i] ?? 0,
+        swHt: sw('swell_wave_height', i) ?? d.hourly.wave_height[i] ?? 0,
         per:  d.hourly.wave_period[i] ?? 0,
         dir:  d.hourly.wave_direction[i] ?? 0,
-        swDir: d.hourly.swell_wave_direction[i] ?? 0,
+        swDir: sw('swell_wave_direction', i) ?? d.hourly.wave_direction[i] ?? 0,
       });
     }
 
@@ -962,9 +988,9 @@ async function loadSwell() {
       allSwellPts.push({
         t:    new Date(hours[i]),
         wvHt: d.hourly.wave_height[i] ?? 0,
-        swHt: d.hourly.swell_wave_height[i] ?? 0,
-        per:  d.hourly.swell_wave_period[i] ?? 0,
-        dir:  d.hourly.swell_wave_direction[i] ?? 0,
+        swHt: sw('swell_wave_height', i) ?? d.hourly.wave_height[i] ?? 0,
+        per:  sw('swell_wave_period', i) ?? d.hourly.wave_period[i] ?? 0,
+        dir:  sw('swell_wave_direction', i) ?? d.hourly.wave_direction[i] ?? 0,
       });
     }
     EXTENDED_DATA.swell = allSwellPts;
