@@ -569,13 +569,13 @@ async function loadBuoy() {
 function drawSwellChart(canvas, pts, hlIdx) {
   const DPR = window.devicePixelRatio || 1;
   const W   = canvas.clientWidth || 320;
-  const H   = 110;
+  const H   = 80;
   canvas.width  = W * DPR;
   canvas.height = H * DPR;
   const ctx = canvas.getContext('2d');
   ctx.scale(DPR, DPR);
 
-  const PL = 32, PR = 6, PT = 10, PB = 18;
+  const PL = 32, PR = 6, PT = 8, PB = 14;
   const cW = W - PL - PR, cH = H - PT - PB;
 
   const maxV  = Math.max(...pts.map(p => p.wvHt), 1);
@@ -755,8 +755,8 @@ function swellBreakdownHTML(swells) {
   }).join('');
 
   return `
-    <div style="margin-bottom:12px">
-      <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;font-family:monospace">Swell Components</div>
+    <div style="margin-bottom:8px">
+      <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;font-family:monospace">Swell Components</div>
       ${rows}
     </div>`;
 }
@@ -811,13 +811,13 @@ function renderQuality() {
   const pct = Math.round(q.score * 10);
   setHTML('quality-body', `
     <div style="display:flex;align-items:center;gap:14px">
-      <span style="font-size:28px;font-weight:bold;font-family:monospace;color:${color}">${q.label}</span>
-      <span style="font-size:14px;color:var(--text-secondary);font-family:monospace">${q.score.toFixed(1)} / 10</span>
+      <span style="font-size:22px;font-weight:bold;font-family:monospace;color:${color}">${q.label}</span>
+      <span style="font-size:12px;color:var(--text-secondary);font-family:monospace">${q.score.toFixed(1)} / 10</span>
     </div>
-    <div style="margin-top:8px;height:6px;border-radius:3px;background:rgba(155,155,155,0.15);overflow:hidden">
+    <div style="margin-top:5px;height:5px;border-radius:3px;background:rgba(155,155,155,0.15);overflow:hidden">
       <div style="width:${pct}%;height:100%;border-radius:3px;background:${color}"></div>
     </div>
-    <div style="margin-top:6px;font-size:10px;color:var(--text-muted);font-family:monospace">
+    <div style="margin-top:4px;font-size:10px;color:var(--text-muted);font-family:monospace">
       swell ${QSTATE.swell.ht?.toFixed(1) ?? '—'} ft @ ${QSTATE.swell.per?.toFixed(0) ?? '—'}s
       · wind ${QSTATE.windMph != null ? QSTATE.windMph.toFixed(0) + ' mph' : '—'}${BEACH_FACING() == null ? ' · direction ignored (custom spot)' : ''}
     </div>
@@ -901,16 +901,16 @@ async function loadSwell() {
         <span style="font-size:9px;font-family:monospace;color:#00d4aa">${p.per.toFixed(0)}s</span>
       </div>`).join('');
 
-    const dirTable = `<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;font-family:monospace">Swell Outlook · ft &amp; period</div>
-      <div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:8px">${dirRows}</div>`;
+    const dirTable = `<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-family:monospace">Swell Outlook · ft &amp; period</div>
+      <div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:6px">${dirRows}</div>`;
 
     const srcLink = ACTIVE.buoyId
       ? `<a href="https://www.ndbc.noaa.gov/station_page.php?station=${ACTIVE.buoyId}" target="_blank" rel="noopener" class="src-link">NDBC Buoy ${ACTIVE.buoyId} ↗</a>`
       : `<a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener" class="src-link">Open-Meteo Marine API ↗</a>`;
 
-    const legend = `<div style="display:flex;gap:14px;margin-bottom:6px;font-size:10px;color:var(--text-muted);font-family:monospace">
-      <span><span style="display:inline-block;width:16px;height:2px;background:#1e90ff;vertical-align:middle;margin-right:4px"></span>Wave (ft)</span>
-      <span><span style="display:inline-block;width:16px;height:0;border-top:1.5px dashed #00d4aa;vertical-align:middle;margin-right:4px"></span>Swell (ft)</span>
+    const legend = `<div style="display:flex;gap:12px;margin-bottom:4px;font-size:9px;color:var(--text-muted);font-family:monospace">
+      <span><span style="display:inline-block;width:14px;height:2px;background:#1e90ff;vertical-align:middle;margin-right:3px"></span>Wave (ft)</span>
+      <span><span style="display:inline-block;width:14px;height:0;border-top:1.5px dashed #00d4aa;vertical-align:middle;margin-right:3px"></span>Swell (ft)</span>
     </div>`;
 
     // Forecast accuracy
@@ -944,8 +944,8 @@ async function loadSwell() {
       ${accuracyBadge}
       <div class="divider"></div>
       ${legend}
-      <div style="position:relative;margin-bottom:10px">
-        <canvas id="swell-chart-canvas" height="110" style="width:100%;height:110px;display:block;touch-action:none;cursor:crosshair"></canvas>
+      <div style="position:relative;margin-bottom:6px">
+        <canvas id="swell-chart-canvas" height="80" style="width:100%;height:80px;display:block;touch-action:none;cursor:crosshair"></canvas>
         <div id="swell-chart-tip" style="display:none;position:absolute;top:6px;left:0;background:rgba(10,22,40,0.92);border:1px solid rgba(30,144,255,0.4);border-radius:6px;padding:6px 9px;pointer-events:none;min-width:130px;max-width:160px"></div>
       </div>
       ${dirTable}
@@ -1013,7 +1013,7 @@ function renderWindForecast(hourly, currentIdx) {
   if (pts.length < 2) { setHTML('wind-forecast-body', errorHTML('Not enough forecast data')); return; }
 
   // ── SVG chart (speed + gusts) ────────────────────────────────────────────
-  const W = 320, H = 100, PL = 32, PR = 6, PT = 8, PB = 18;
+  const W = 320, H = 72, PL = 32, PR = 6, PT = 6, PB = 14;
   const cW = W - PL - PR, cH = H - PT - PB;
 
   const allVals = [...pts.map(p => p.spd), ...pts.map(p => p.gst)];
@@ -1060,7 +1060,7 @@ function renderWindForecast(hourly, currentIdx) {
   const nowLine = `<line x1="${nowX}" y1="${PT}" x2="${nowX}" y2="${PT + cH}" stroke="rgba(255,255,255,0.2)" stroke-width="1" stroke-dasharray="3,3"/>
     <text x="${nowX}" y="${PT - 1}" text-anchor="middle" fill="rgba(255,255,255,0.3)" font-size="7" font-family="monospace">NOW</text>`;
 
-  const svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;margin-bottom:10px">
+  const svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;margin-bottom:6px">
     ${yLabels}${xLabels}${nowLine}
     <path d="${areaPath}" fill="rgba(0,200,83,0.15)"/>
     <polyline points="${speedPts}" fill="none" stroke="#00c853" stroke-width="1.5" stroke-linejoin="round"/>
@@ -1068,9 +1068,9 @@ function renderWindForecast(hourly, currentIdx) {
   </svg>`;
 
   // Legend
-  const legend = `<div style="display:flex;gap:14px;margin-bottom:8px;font-size:10px;color:var(--text-muted);font-family:monospace">
-    <span><span style="display:inline-block;width:16px;height:2px;background:#00c853;vertical-align:middle;margin-right:4px"></span>Speed</span>
-    <span><span style="display:inline-block;width:16px;height:1px;background:#ffeb3b;vertical-align:middle;margin-right:4px;border-top:1px dashed #ffeb3b"></span>Gusts</span>
+  const legend = `<div style="display:flex;gap:12px;margin-bottom:4px;font-size:9px;color:var(--text-muted);font-family:monospace">
+    <span><span style="display:inline-block;width:14px;height:2px;background:#00c853;vertical-align:middle;margin-right:3px"></span>Speed</span>
+    <span><span style="display:inline-block;width:14px;height:1px;background:#ffeb3b;vertical-align:middle;margin-right:3px;border-top:1px dashed #ffeb3b"></span>Gusts</span>
   </div>`;
 
   // Direction table — every 3 hours, next 24 hours
@@ -1089,11 +1089,11 @@ function renderWindForecast(hourly, currentIdx) {
     </div>`;
   }).join('');
 
-  const dirTable = `<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;font-family:monospace">Direction Outlook · kts</div>
-    <div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:8px">${dirRows}</div>`;
+  const dirTable = `<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-family:monospace">Direction Outlook · kts</div>
+    <div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:6px">${dirRows}</div>`;
 
   setHTML('wind-forecast-body', legend
-    + `<div id="wind-chart-container" class="wind-chart-container" style="position:relative;margin-bottom:10px">${svg}<div id="wind-chart-tip" class="wind-chart-tip"></div></div>`
+    + `<div id="wind-chart-container" class="wind-chart-container" style="position:relative;margin-bottom:6px">${svg}<div id="wind-chart-tip" class="wind-chart-tip"></div></div>`
     + dirTable
     + `<div class="buoy-source"><a href="https://open-meteo.com/en/docs" target="_blank" rel="noopener" class="src-link">Open-Meteo Weather API ↗</a></div>`);
   setupWindChartInteraction(pts);
@@ -1294,15 +1294,15 @@ async function loadTides() {
     const toggleActive = _tideRange === 'extended' ? ' active' : '';
 
     setHTML('tides-body', `
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
-        <span style="font-size:22px;font-weight:700;color:#1e90ff">${nowV.toFixed(2)}<span style="font-size:12px;color:var(--text-muted)"> ft</span></span>
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:12px;color:var(--text-secondary)">${trend}</span>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+        <span style="font-size:18px;font-weight:700;color:#1e90ff">${nowV.toFixed(2)}<span style="font-size:11px;color:var(--text-muted)"> ft</span></span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:11px;color:var(--text-secondary)">${trend}</span>
           <button class="tide-toggle${toggleActive}" onclick="toggleTideRange()">${toggleLabel}</button>
         </div>
       </div>
       ${svg}
-      <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin:10px 0 5px">Today's Schedule</div>
+      <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin:6px 0 4px">Today's Schedule</div>
       <div class="tide-schedule">${scheduleHTML || '<div class="error-msg">No events today</div>'}</div>
       <div class="buoy-source" style="margin-top:6px"><a href="https://tidesandcurrents.noaa.gov/waterlevels.html?id=${NOAA_STATION()}" target="_blank" rel="noopener" class="src-link">NOAA Tides & Currents · Station ${NOAA_STATION()} ↗</a></div>
     `);
@@ -1364,8 +1364,8 @@ async function loadMarineForecast() {
         detail = raw.split('\n').slice(1).join(' ').trim();
       }
       return `
-        <div style="margin-bottom:10px">
-          <div style="font-size:11px;font-weight:600;color:var(--accent-blue);margin-bottom:3px">${escapeHtml(title)}</div>
+        <div style="margin-bottom:6px">
+          <div style="font-size:11px;font-weight:600;color:var(--accent-blue);margin-bottom:2px">${escapeHtml(title)}</div>
           <div class="forecast-text">${escapeHtml(detail)}</div>
         </div>`;
     }).join('');
@@ -1520,9 +1520,9 @@ async function loadUV() {
 
     const pct = Math.min(100, (uv / 12) * 100);
     setHTML('uv-body', `
-      <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:4px">
-        <span style="font-size:32px;font-weight:700;color:${color}">${uv.toFixed(1)}</span>
-        <span style="font-size:14px;color:var(--text-secondary)">${level}</span>
+      <div style="display:flex;align-items:baseline;gap:5px;margin-bottom:3px">
+        <span style="font-size:24px;font-weight:700;color:${color}">${uv.toFixed(1)}</span>
+        <span style="font-size:12px;color:var(--text-secondary)">${level}</span>
       </div>
       <div class="uv-bar-wrap">
         <div class="uv-bar-track">
@@ -1532,7 +1532,7 @@ async function loadUV() {
           <span>Low</span><span>Moderate</span><span>High</span><span>Very High</span><span>Extreme</span>
         </div>
       </div>
-      <div style="font-size:10px;color:var(--text-muted);margin-top:6px">
+      <div style="font-size:10px;color:var(--text-muted);margin-top:3px">
         ${uv >= 6 ? '🧴 Sunscreen recommended' : uv >= 3 ? '🕶️ Sun protection advised' : '✓ Low exposure risk'}
       </div>
     `);
@@ -1562,8 +1562,8 @@ function swellAlignmentHTML(swellDir, beachFacing) {
         <span class="beach-line" style="transform:rotate(${beachFacing}deg);color:${color}">━</span>
       </div>
       <div>
-        <div style="font-size:12px;font-weight:600;color:${color}">${quality} Alignment</div>
-        <div style="font-size:10px;color:var(--text-muted)">${label} · ${Math.round(diff)}° off beach (${Math.round(beachFacing)}°)</div>
+        <div style="font-size:11px;font-weight:600;color:${color}">${quality} Alignment</div>
+        <div style="font-size:9px;color:var(--text-muted)">${label} · ${Math.round(diff)}° off beach (${Math.round(beachFacing)}°)</div>
       </div>
     </div>`;
 }
@@ -1957,18 +1957,18 @@ function render7DayOutlook() {
     const isActive = d.date.toDateString() === now.toDateString();
     const highlight = isActive ? 'background:rgba(30,144,255,0.08);' : '';
 
-    return `<div style="flex:1;min-width:0;text-align:center;padding:8px 2px;${highlight}border-right:1px solid var(--border);font-family:monospace">
-      <div style="font-size:10px;font-weight:bold;color:var(--text-primary);white-space:nowrap">${dayLabel(d)}</div>
-      <div style="font-size:8px;color:var(--text-muted);margin-bottom:6px">${dateLabel(d)}</div>
-      <div style="font-size:14px;font-weight:bold;color:var(--text-primary);margin-bottom:4px;white-space:nowrap">${rangeText(r)}</div>
-      <div style="display:flex;justify-content:center;gap:1px;margin-bottom:6px">${windArrows}</div>
-      <div style="display:flex;gap:2px;margin-bottom:3px">${swellBars}</div>
+    return `<div style="flex:1;min-width:0;text-align:center;padding:5px 2px;${highlight}border-right:1px solid var(--border);font-family:monospace">
+      <div style="font-size:9px;font-weight:bold;color:var(--text-primary);white-space:nowrap">${dayLabel(d)}</div>
+      <div style="font-size:8px;color:var(--text-muted);margin-bottom:3px">${dateLabel(d)}</div>
+      <div style="font-size:13px;font-weight:bold;color:var(--text-primary);margin-bottom:3px;white-space:nowrap">${rangeText(r)}</div>
+      <div style="display:flex;justify-content:center;gap:1px;margin-bottom:3px">${windArrows}</div>
+      <div style="display:flex;gap:2px;margin-bottom:2px">${swellBars}</div>
       <div style="display:flex;gap:2px">${windBars}</div>
     </div>`;
   }).join('');
 
   // ── Legend for color bars ───────────────────────────────────────────────
-  const legend = `<div style="display:flex;justify-content:space-between;margin-top:8px;font-size:9px;color:var(--text-muted);font-family:monospace">
+  const legend = `<div style="display:flex;justify-content:space-between;margin-top:5px;font-size:9px;color:var(--text-muted);font-family:monospace">
     <div style="display:flex;align-items:center;gap:4px">
       <span style="width:6px;height:6px;border-radius:3px;background:#00c853;display:inline-block"></span>
       <span style="width:6px;height:6px;border-radius:3px;background:#ffeb3b;display:inline-block"></span>

@@ -32,8 +32,8 @@ body {
 /* Header */
 header {
   background: linear-gradient(180deg, #071020 0%, var(--bg) 100%);
-  padding: 16px 16px 12px;
-  padding-top: calc(16px + env(safe-area-inset-top));
+  padding: 10px 16px 8px;
+  padding-top: calc(10px + env(safe-area-inset-top));
   position: sticky;
   top: 0;
   z-index: 100;
@@ -44,7 +44,7 @@ header {
 }
 
 .header-left h1 {
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: -0.3px;
@@ -63,8 +63,8 @@ header {
 }
 
 .header-btn {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -89,8 +89,8 @@ header {
 /* Location selector */
 .location-selector {
   display: flex;
-  gap: 8px;
-  padding: 10px 16px;
+  gap: 6px;
+  padding: 6px 16px;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
@@ -105,8 +105,8 @@ header {
   border: 1px solid var(--border);
   border-radius: 20px;
   color: var(--text-secondary);
-  padding: 6px 16px;
-  font-size: 13px;
+  padding: 4px 12px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
@@ -137,12 +137,12 @@ header {
 
 /* Main layout */
 main {
-  padding: 12px;
+  padding: 8px;
   max-width: 600px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 
 @media (min-width: 768px) {
@@ -150,7 +150,7 @@ main {
     max-width: 900px;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 12px;
+    gap: 8px;
   }
   .section-header, #card-quality, #card-swell, #card-wind-forecast, #card-7day, .card-row { grid-column: 1 / -1; }
 }
@@ -171,7 +171,7 @@ main {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 4px 4px;
+  padding: 6px 4px 2px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
@@ -207,7 +207,7 @@ main {
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 10px;
   overflow: hidden;
 }
 
@@ -215,7 +215,7 @@ main {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px 8px;
+  padding: 8px 10px 5px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -239,7 +239,7 @@ main {
   font-weight: 600;
 }
 
-.card-body { padding: 12px 14px; }
+.card-body { padding: 8px 10px; }
 
 /* Primary stat */
 .stat-row {
@@ -250,14 +250,14 @@ main {
 }
 
 .stat-value {
-  font-size: 36px;
+  font-size: 28px;
   font-weight: 700;
   line-height: 1;
   color: var(--text-primary);
 }
 
 .stat-unit {
-  font-size: 16px;
+  font-size: 13px;
   color: var(--text-secondary);
   font-weight: 400;
 }
@@ -265,28 +265,28 @@ main {
 .stat-label {
   font-size: 11px;
   color: var(--text-muted);
-  margin-bottom: 10px;
+  margin-bottom: 4px;
 }
 
 /* Grid stats */
 .stats-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 10px;
+  gap: 5px;
+  margin-top: 6px;
 }
 
 .stats-grid-3 {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 8px;
-  margin-top: 10px;
+  gap: 5px;
+  margin-top: 6px;
 }
 
 .stat-cell {
   background: var(--bg-card2);
-  border-radius: 10px;
-  padding: 10px;
+  border-radius: 8px;
+  padding: 6px;
 }
 
 .stat-cell .label {
@@ -298,7 +298,7 @@ main {
 }
 
 .stat-cell .value {
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -310,20 +310,20 @@ main {
 .divider {
   height: 1px;
   background: var(--border);
-  margin: 10px 0;
+  margin: 6px 0;
 }
 
 /* Wind direction arrow */
 .wind-dir-display {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
 .wind-arrow-circle {
-  width: 52px;
-  height: 52px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: var(--bg-card2);
   border: 2px solid var(--border);
@@ -334,7 +334,7 @@ main {
 }
 
 .wind-arrow {
-  font-size: 22px;
+  font-size: 18px;
   display: inline-block;
   transition: transform 0.5s ease;
 }
@@ -345,9 +345,9 @@ main {
   gap: 4px;
 }
 
-.wind-info .speed { font-size: 32px; font-weight: 700; }
-.wind-info .unit { font-size: 14px; color: var(--text-secondary); }
-.wind-info .desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.wind-info .speed { font-size: 24px; font-weight: 700; }
+.wind-info .unit { font-size: 12px; color: var(--text-secondary); }
+.wind-info .desc { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
 
 /* Wind color classes */
 .wind-calm   { color: var(--wind-calm); }
@@ -361,13 +361,13 @@ main {
 .swell-compass {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
 .compass-rose {
-  width: 52px;
-  height: 52px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: var(--bg-card2);
   border: 2px solid var(--border);
@@ -375,24 +375,24 @@ main {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  font-size: 20px;
+  font-size: 16px;
 }
 
 /* Tide card */
 .tide-status {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
 .tide-arrow {
-  font-size: 28px;
+  font-size: 22px;
   color: var(--accent-purple);
 }
 
 .tide-now .height {
-  font-size: 30px;
+  font-size: 24px;
   font-weight: 700;
   color: var(--accent-purple);
 }
@@ -405,8 +405,8 @@ main {
 .tide-schedule {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-top: 10px;
+  gap: 4px;
+  margin-top: 6px;
 }
 
 .tide-event {
@@ -414,8 +414,8 @@ main {
   align-items: center;
   justify-content: space-between;
   background: var(--bg-card2);
-  border-radius: 8px;
-  padding: 8px 10px;
+  border-radius: 6px;
+  padding: 5px 8px;
 }
 
 .tide-event .type-badge {
@@ -441,7 +441,7 @@ main {
 
 /* Tide bar */
 .tide-bar-wrap {
-  margin: 10px 0 4px;
+  margin: 6px 0 3px;
   position: relative;
 }
 
@@ -484,13 +484,13 @@ main {
 .sun-moon-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 6px;
 }
 
 .sun-section, .moon-section {
   background: var(--bg-card2);
-  border-radius: 10px;
-  padding: 10px;
+  border-radius: 8px;
+  padding: 7px;
 }
 
 .section-label {
@@ -498,7 +498,7 @@ main {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -507,7 +507,7 @@ main {
 .sun-times, .moon-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .time-row {
@@ -519,8 +519,8 @@ main {
 .time-row .lbl { font-size: 11px; color: var(--text-muted); }
 .time-row .val { font-size: 13px; font-weight: 600; color: var(--text-primary); }
 
-.moon-phase-icon { font-size: 28px; text-align: center; margin-bottom: 4px; }
-.moon-phase-name { font-size: 12px; color: var(--text-secondary); text-align: center; }
+.moon-phase-icon { font-size: 22px; text-align: center; margin-bottom: 2px; }
+.moon-phase-name { font-size: 11px; color: var(--text-secondary); text-align: center; }
 
 /* UV Index */
 .uv-bar-wrap { margin: 6px 0; }
@@ -544,13 +544,13 @@ main {
 
 /* Marine / NWS forecast */
 .forecast-text {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-secondary);
-  line-height: 1.6;
+  line-height: 1.5;
   background: var(--bg-card2);
-  border-radius: 10px;
-  padding: 10px;
-  max-height: 120px;
+  border-radius: 8px;
+  padding: 7px;
+  max-height: 80px;
   overflow-y: auto;
 }
 
@@ -562,14 +562,14 @@ main {
 .rip-indicator {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   background: var(--bg-card2);
-  border-radius: 10px;
-  padding: 12px;
+  border-radius: 8px;
+  padding: 8px;
 }
 
 .rip-level {
-  font-size: 32px;
+  font-size: 24px;
   font-weight: 700;
 }
 
@@ -577,7 +577,7 @@ main {
 .rip-level.moderate { color: var(--wind-moderate); }
 .rip-level.high { color: var(--wind-strong); }
 
-.rip-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+.rip-desc { font-size: 11px; color: var(--text-secondary); line-height: 1.4; }
 
 /* NOAA buoy */
 .buoy-source {
@@ -618,8 +618,8 @@ main {
 
 /* Responsive tweak for very small screens */
 @media (max-width: 360px) {
-  .stat-value { font-size: 30px; }
-  .wind-info .speed { font-size: 26px; }
+  .stat-value { font-size: 24px; }
+  .wind-info .speed { font-size: 20px; }
 }
 
 /* (icon-btn removed — unified into .header-btn above) */
@@ -770,16 +770,16 @@ main {
 .alignment-badge {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   background: var(--bg-card2);
   border-radius: 8px;
-  padding: 8px 10px;
-  margin-bottom: 10px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
 }
 .alignment-compass {
   position: relative;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   display: flex;
   align-items: center;
