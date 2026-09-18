@@ -433,6 +433,13 @@ function windClass(knots) {
 function fmtTime(date) {
   return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 }
+function fmtHourShort(t) {
+  const h = t.getHours();
+  if (h === 0) return '12a';
+  if (h < 12) return h + 'a';
+  if (h === 12) return '12p';
+  return (h - 12) + 'p';
+}
 
 function setHTML(id, html) {
   const el = document.getElementById(id);
@@ -827,12 +834,12 @@ function swellBreakdownHTML(swells) {
     </div>`;
 }
 
-// ─── Surf Quality Rating (ported from macOS app SurfQuality.evaluate) ─────────
-const QSTATE = { swell: null, windMph: null };
+// ─── Surf Quality Rating ──────────────────────────────────────────────────────
+const QSTATE = { swell: null, windKts: null, windDir: null };
 const EXTENDED_DATA = { swell: null, wind: null };
 
-function evaluateQuality(swell, windMph, facing) {
-  if (!swell || !(swell.ht > 0.3)) return { label: 'FLAT', score: 0 };
+function evaluateQuality(swell, windKts, windDir, facing) {
+  if (!swell || !(swell.ht > 0.3)) return { label: 'FLAT', score: 0, windType: null, consistency: null };
 
   const ht = swell.ht;
   const htS = ht < 0.5 ? 0 : ht < 1 ? 2 : ht < 2 ? 5 : ht < 4 ? 8 : ht < 8 ? 10 : ht < 12 ? 6 : 2;
@@ -840,47 +847,126 @@ function evaluateQuality(swell, windMph, facing) {
   const per = swell.per ?? 0;
   const perS = per < 7 ? 0 : per < 10 ? 4 : per < 13 ? 7 : per < 16 ? 9 : 10;
 
-  const ws = windMph ?? 0;
-  const windS = ws < 5 ? 10 : ws < 10 ? 8 : ws < 15 ? 5 : ws < 20 ? 2 : 0;
+  // Consistency: longer period = more organized swell = better wave sets
+  const consistency = per >= 16 ? 'Very High' : per >= 13 ? 'High' : per >= 10 ? 'Moderate' : per >= 7 ? 'Low' : 'Very Low';
+
+  // Wind scoring: combines speed + direction (onshore vs offshore)
+  const ws = windKts ?? 0;
+  const spdScore = ws < 5 ? 10 : ws < 10 ? 8 : ws < 15 ? 5 : ws < 20 ? 2 : 0;
+  let windS, windType = null;
+
+  if (facing != null && windDir != null) {
+    // Offshore = wind blowing FROM land → ocean. Beach faces X°, offshore comes from (X+180)°
+    const offshoreDir = (facing + 180) % 360;
+    let wdDiff = Math.abs(windDir - offshoreDir);
+    if (wdDiff > 180) wdDiff = 360 - wdDiff;
+
+    windType = wdDiff < 45 ? 'Offshore' : wdDiff < 90 ? 'Side-offshore'
+      : wdDiff < 135 ? 'Cross-shore' : wdDiff < 157 ? 'Side-onshore' : 'Onshore';
+
+    const dirBonus = wdDiff < 45 ? 10 : wdDiff < 90 ? 7 : wdDiff < 135 ? 4 : wdDiff < 157 ? 1 : 0;
+
+    // In light winds direction barely matters; in strong winds it's critical
+    const dirWeight = ws < 5 ? 0.1 : ws < 10 ? 0.3 : 0.5;
+    windS = spdScore * (1 - dirWeight) + dirBonus * dirWeight;
+  } else {
+    windS = spdScore;
+  }
 
   let total;
   if (facing == null) {
-    // No beach orientation known (custom spot) — score without direction
-    total = htS * 0.40 + perS * 0.40 + windS * 0.20;
+    total = htS * 0.40 + perS * 0.35 + windS * 0.25;
   } else {
     let diff = Math.abs((swell.dir ?? 0) - facing);
     if (diff > 180) diff = 360 - diff;
     const dirS = diff < 20 ? 10 : diff < 45 ? 8 : diff < 70 ? 5 : diff < 90 ? 2 : 0;
-    total = htS * 0.30 + perS * 0.30 + dirS * 0.25 + windS * 0.15;
+    total = htS * 0.30 + perS * 0.25 + dirS * 0.20 + windS * 0.25;
   }
 
   const label = total < 2 ? 'FLAT' : total < 4 ? 'POOR' : total < 6 ? 'FAIR' : total < 8 ? 'GOOD' : 'EPIC';
-  return { label, score: total };
+  return { label, score: total, windType, consistency };
 }
 
 const QUALITY_COLORS = {
   FLAT: '#9e9e9e', POOR: '#ff5252', FAIR: '#ffb300', GOOD: '#00c853', EPIC: '#9b6dff',
 };
+const WIND_TYPE_COLORS = {
+  'Offshore': '#00c853', 'Side-offshore': '#69f0ae', 'Cross-shore': '#ffeb3b',
+  'Side-onshore': '#ff9800', 'Onshore': '#f44336',
+};
+const CONSISTENCY_COLORS = {
+  'Very High': '#9b6dff', 'High': '#1e90ff', 'Moderate': '#00d4aa', 'Low': '#ffb300', 'Very Low': '#f44336',
+};
+
+function computePeakHours(swPts, wnPts, facing) {
+  const hourlyQ = [];
+  for (let i = 0; i < Math.min(swPts.length, 24); i++) {
+    const sw = swPts[i];
+    const hr = sw.t.getHours();
+    if (hr < 5 || hr > 20) continue; // daylight only
+    const swTime = sw.t.getTime();
+    let wn = null;
+    for (const w of wnPts) {
+      if (Math.abs(w.t.getTime() - swTime) < 3600000) { wn = w; break; }
+    }
+    if (!wn) continue;
+    const q = evaluateQuality({ ht: sw.swHt, per: sw.per, dir: sw.dir }, wn.spd, wn.dir, facing);
+    hourlyQ.push({ t: sw.t, score: q.score, label: q.label });
+  }
+  if (hourlyQ.length < 3) return null;
+  let bestAvg = -1, bestStart = 0;
+  for (let i = 0; i <= hourlyQ.length - 3; i++) {
+    const avg = (hourlyQ[i].score + hourlyQ[i + 1].score + hourlyQ[i + 2].score) / 3;
+    if (avg > bestAvg) { bestAvg = avg; bestStart = i; }
+  }
+  const label = bestAvg < 2 ? 'FLAT' : bestAvg < 4 ? 'POOR' : bestAvg < 6 ? 'FAIR' : bestAvg < 8 ? 'GOOD' : 'EPIC';
+  return { start: hourlyQ[bestStart].t, end: hourlyQ[bestStart + 2].t, score: bestAvg, label };
+}
 
 function renderQuality() {
-  if (!QSTATE.swell) return; // wait for swell; wind is optional
-  const q = evaluateQuality(QSTATE.swell, QSTATE.windMph, BEACH_FACING());
+  if (!QSTATE.swell) return;
+  const q = evaluateQuality(QSTATE.swell, QSTATE.windKts, QSTATE.windDir, BEACH_FACING());
   const color = QUALITY_COLORS[q.label];
 
-  // Render into the buoy card's quality slot
   const slot = document.getElementById('buoy-quality');
   if (!slot) return;
   const pct = Math.round(q.score * 10);
-  slot.innerHTML = `
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
-      <span style="font-size:18px;font-weight:bold;font-family:monospace;color:${color}">${q.label}</span>
-      <span style="font-size:11px;color:var(--text-secondary);font-family:monospace">${q.score.toFixed(1)} / 10</span>
-    </div>
-    <div style="height:4px;border-radius:2px;background:rgba(155,155,155,0.15);overflow:hidden">
-      <div style="width:${pct}%;height:100%;border-radius:2px;background:${color}"></div>
-    </div>`;
 
-  // Update badge on the buoy card header
+  // Wind type badge
+  const wtColor = q.windType ? WIND_TYPE_COLORS[q.windType] : null;
+  const windBadge = q.windType
+    ? `<span style="font-size:9px;padding:2px 5px;border-radius:3px;background:${wtColor}20;color:${wtColor};font-family:monospace">${q.windType}</span>`
+    : '';
+
+  // Consistency badge
+  const ccColor = q.consistency ? CONSISTENCY_COLORS[q.consistency] : null;
+  const consBadge = q.consistency
+    ? `<span style="font-size:9px;padding:2px 5px;border-radius:3px;background:${ccColor}20;color:${ccColor};font-family:monospace">${q.consistency}</span>`
+    : '';
+
+  // Peak hours (needs both swell + wind hourly data)
+  let peakHTML = '';
+  if (EXTENDED_DATA.swell && EXTENDED_DATA.wind) {
+    const peak = computePeakHours(EXTENDED_DATA.swell, EXTENDED_DATA.wind, BEACH_FACING());
+    if (peak) {
+      const pc = QUALITY_COLORS[peak.label];
+      peakHTML = `<div style="margin-top:4px;font-size:9px;color:var(--text-muted);font-family:monospace">
+        Peak <span style="color:${pc};font-weight:600">${fmtHourShort(peak.start)}-${fmtHourShort(peak.end)}</span>
+      </div>`;
+    }
+  }
+
+  slot.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+      <span style="font-size:18px;font-weight:bold;font-family:monospace;color:${color}">${q.label}</span>
+      <span style="font-size:11px;color:var(--text-secondary);font-family:monospace">${q.score.toFixed(1)}/10</span>
+    </div>
+    <div style="height:4px;border-radius:2px;background:rgba(155,155,155,0.15);overflow:hidden;margin-bottom:5px">
+      <div style="width:${pct}%;height:100%;border-radius:2px;background:${color}"></div>
+    </div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap">${windBadge}${consBadge}</div>
+    ${peakHTML}`;
+
   const badge = document.getElementById('buoy-badge');
   if (badge) {
     badge.textContent = q.label;
@@ -1128,9 +1214,8 @@ async function loadWeather() {
     render7DayOutlook();
     render24HourHeatmap();
 
-    // Quality rating expects mph; wind here is in knots
-    const spdKn = d.hourly.wind_speed_10m[idx];
-    QSTATE.windMph = spdKn != null ? spdKn * 1.15078 : null;
+    QSTATE.windKts = d.hourly.wind_speed_10m[idx] ?? null;
+    QSTATE.windDir = d.hourly.wind_direction_10m[idx] ?? null;
     renderQuality();
   } catch (e) {
     setHTML('wind-body', '<span style="color:#ff5252;font-size:10px">Wind unavailable</span>');
@@ -2099,9 +2184,30 @@ function render7DayOutlook() {
     return `${r.lo}-${r.hi}ft${plus}`;
   }
 
+  // ── Day quality: best rating across AM/MID/PM windows ───────────────
+  function dayQuality(d) {
+    const facing = BEACH_FACING();
+    let best = null;
+    for (let si = 0; si < 3; si++) {
+      const sArr = d.swell[si];
+      const wArr = d.wind[si];
+      if (!sArr.length || !wArr.length) continue;
+      const avgHt  = sArr.reduce((a, p) => a + p.swHt, 0) / sArr.length;
+      const avgPer = sArr.reduce((a, p) => a + p.per, 0) / sArr.length;
+      const avgDir = sArr[0].dir;
+      const wAvg = windAvg(wArr);
+      const q = evaluateQuality({ ht: avgHt, per: avgPer, dir: avgDir }, wAvg.spd, wAvg.dir, facing);
+      if (!best || q.score > best.score) best = q;
+    }
+    return best;
+  }
+
   // ── Build columns ──────────────────────────────────────────────────────
   const cols = show.map(d => {
     const r = swellRange(d);
+    const dq = dayQuality(d);
+    const qColor = dq ? QUALITY_COLORS[dq.label] : '#555';
+
     // Wind arrows: show AM, MID, PM directions
     const windSlots = d.wind.map(windAvg);
 
@@ -2123,7 +2229,8 @@ function render7DayOutlook() {
 
     return `<div style="flex:1;min-width:0;text-align:center;padding:5px 2px;${highlight}border-right:1px solid var(--border);font-family:monospace">
       <div style="font-size:9px;font-weight:bold;color:var(--text-primary);white-space:nowrap">${dayLabel(d)}</div>
-      <div style="font-size:8px;color:var(--text-muted);margin-bottom:3px">${dateLabel(d)}</div>
+      <div style="font-size:8px;color:var(--text-muted);margin-bottom:2px">${dateLabel(d)}</div>
+      <div style="font-size:10px;font-weight:bold;color:${qColor};margin-bottom:2px">${dq ? dq.label : '-'}</div>
       <div style="font-size:13px;font-weight:bold;color:var(--text-primary);margin-bottom:3px;white-space:nowrap">${rangeText(r)}</div>
       <div style="display:flex;justify-content:center;gap:1px;margin-bottom:3px">${windArrows}</div>
       <div style="display:flex;gap:2px;margin-bottom:2px">${swellBars}</div>
@@ -2197,13 +2304,7 @@ function render24HourHeatmap() {
     if (spd < 22) return '#ff9800';
     return '#f44336';
   }
-  function fmtHour(t) {
-    const h = t.getHours();
-    if (h === 0) return '12a';
-    if (h < 12) return h + 'a';
-    if (h === 12) return '12p';
-    return (h - 12) + 'p';
-  }
+  const facing = BEACH_FACING();
 
   const cols = hours.map((h, i) => {
     const swHt = h.swell ? h.swell.swHt : null;
@@ -2211,6 +2312,11 @@ function render24HourHeatmap() {
     const wDir = h.wind ? h.wind.dir : null;
     const isNow = i === 0;
     const highlight = isNow ? 'background:rgba(30,144,255,0.12);' : '';
+
+    // Quality for this hour
+    const hSwell = h.swell ? { ht: h.swell.swHt, per: h.swell.per, dir: h.swell.dir } : null;
+    const hq = hSwell && h.wind ? evaluateQuality(hSwell, h.wind.spd, h.wind.dir, facing) : null;
+    const qColor = hq ? QUALITY_COLORS[hq.label] : '#333';
 
     // Swell cell
     const swBg = swHt !== null ? swellColor(swHt) : '#333';
@@ -2227,7 +2333,8 @@ function render24HourHeatmap() {
     const dayBorder = h.t.getHours() === 0 ? 'border-left:2px solid var(--accent-blue);' : '';
 
     return `<div style="flex:0 0 36px;text-align:center;padding:4px 0;${highlight}${dayBorder}border-right:1px solid var(--border);font-family:monospace">
-      <div style="font-size:8px;color:${isNow ? 'var(--accent-teal)' : 'var(--text-muted)'};font-weight:${isNow ? '700' : '400'};margin-bottom:2px">${isNow ? 'NOW' : fmtHour(h.t)}</div>
+      <div style="height:5px;border-radius:2px;background:${qColor};opacity:0.9;margin:0 3px 2px"></div>
+      <div style="font-size:8px;color:${isNow ? 'var(--accent-teal)' : 'var(--text-muted)'};font-weight:${isNow ? '700' : '400'};margin-bottom:2px">${isNow ? 'NOW' : fmtHourShort(h.t)}</div>
       <div style="font-size:10px;font-weight:700;color:${swBg};margin-bottom:2px">${swText}</div>
       <div style="margin-bottom:1px">${arrow}</div>
       <div style="font-size:9px;font-weight:600;color:${wnBg}">${wnText}</div>
@@ -2240,13 +2347,13 @@ function render24HourHeatmap() {
 
   const legend = `<div style="display:flex;justify-content:space-between;margin-top:4px;font-size:9px;color:var(--text-muted);font-family:monospace">
     <div style="display:flex;align-items:center;gap:6px">
-      <span>Swell ft (top) / Wind kts (bottom)</span>
+      <span>Quality (top) / Swell ft / Wind kts</span>
     </div>
     <div style="display:flex;align-items:center;gap:3px">
-      <span style="width:5px;height:5px;border-radius:2px;background:#00c853;display:inline-block"></span>
-      <span style="width:5px;height:5px;border-radius:2px;background:#ffeb3b;display:inline-block"></span>
-      <span style="width:5px;height:5px;border-radius:2px;background:#ff9800;display:inline-block"></span>
-      <span style="width:5px;height:5px;border-radius:2px;background:#f44336;display:inline-block"></span>
+      <span style="width:5px;height:5px;border-radius:2px;background:#9b6dff;display:inline-block" title="EPIC"></span>
+      <span style="width:5px;height:5px;border-radius:2px;background:#00c853;display:inline-block" title="GOOD"></span>
+      <span style="width:5px;height:5px;border-radius:2px;background:#ffb300;display:inline-block" title="FAIR"></span>
+      <span style="width:5px;height:5px;border-radius:2px;background:#ff5252;display:inline-block" title="POOR"></span>
     </div>
   </div>`;
 
@@ -2434,7 +2541,8 @@ async function refreshAll() {
 
   // Reset visible card bodies to loading state
   QSTATE.swell = null;
-  QSTATE.windMph = null;
+  QSTATE.windKts = null;
+  QSTATE.windDir = null;
   EXTENDED_DATA.swell = null;
   EXTENDED_DATA.wind  = null;
   setHTML('7day-body',          loadingHTML());
