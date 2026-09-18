@@ -2373,8 +2373,8 @@ function renderBuoyMap(buoys) {
     // Data label
     if (!b.offline) {
       const lines = [];
-      if (b.wvHt != null) lines.push(`${b.wvHt.toFixed(1)}ft ${b.dpd ?? ''}s`);
-      if (b.wspd != null) lines.push(`${b.wspd.toFixed(0)}kts ${b.wdir != null ? degToCompass(b.wdir) : ''}`);
+      if (b.wvHt != null) lines.push(`${b.wvHt.toFixed(1)}ft ${b.dpd ?? ''}s ${b.mwd != null ? degToCompass(b.mwd) : ''}`);
+      if (b.wspd != null) lines.push(`wind ${b.wspd.toFixed(0)}kts ${b.wdir != null ? degToCompass(b.wdir) : ''}`);
 
       // Position label to avoid coastline overlap
       const labelX = parseFloat(bx) < W / 2 ? parseFloat(bx) - 6 : parseFloat(bx) + 6;
@@ -2385,14 +2385,13 @@ function renderBuoyMap(buoys) {
         buoyMarkers += `<text x="${labelX}" y="${parseFloat(by) + 2 + li * 10}" text-anchor="${anchor}" fill="#ccd6e0" font-size="8" font-family="monospace" font-weight="600">${line}</text>`;
       });
 
-      // Wind arrow
-      if (b.wdir != null && b.wspd != null && b.wspd > 0) {
-        const arrowLen = 10;
-        const rad = (b.wdir * Math.PI) / 180;
+      // Swell direction arrow (shows where waves are coming FROM)
+      if (b.mwd != null && b.wvHt != null) {
+        const arrowLen = 12;
+        const rad = ((b.mwd + 180) * Math.PI) / 180; // +180 to point toward shore
         const ax = parseFloat(bx) + Math.sin(rad) * arrowLen;
         const ay = parseFloat(by) - Math.cos(rad) * arrowLen;
-        const windColor = b.wspd < 10 ? '#00c853' : b.wspd < 20 ? '#ffeb3b' : '#f44336';
-        buoyMarkers += `<line x1="${bx}" y1="${by}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="${windColor}" stroke-width="1.5" marker-end="url(#arrowhead)"/>`;
+        buoyMarkers += `<line x1="${bx}" y1="${by}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="#1e90ff" stroke-width="1.5" marker-end="url(#arrowhead)"/>`;
       }
     } else {
       buoyMarkers += `<text x="${parseFloat(bx) + 6}" y="${parseFloat(by) + 3}" fill="#555" font-size="7" font-family="monospace">${b.name}</text>`;
@@ -2423,6 +2422,7 @@ function renderBuoyMap(buoys) {
 
   setHTML('buoy-map-body', svg
     + `<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:8px;color:var(--text-muted);font-family:monospace">`
+    + `<span><span style="display:inline-block;width:8px;height:0;border-top:2px solid #1e90ff;vertical-align:middle;margin-right:3px"></span>Swell dir</span>`
     + `<span><span style="display:inline-block;width:6px;height:6px;border-radius:3px;background:#00d4aa;vertical-align:middle;margin-right:3px"></span>Wave data</span>`
     + `<span><span style="display:inline-block;width:6px;height:6px;border-radius:3px;background:#ffb300;vertical-align:middle;margin-right:3px"></span>Wind only</span>`
     + `<span><span style="display:inline-block;width:6px;height:6px;border-radius:50%;border:1.5px solid #ff6b6b;vertical-align:middle;margin-right:3px"></span>Your spot</span>`
