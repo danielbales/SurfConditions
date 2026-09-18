@@ -49,14 +49,25 @@
     </div>
     <div class="section-body">
 
-      <!-- Wave Observations (Open-Meteo Marine current) -->
-      <div class="card" id="card-buoy">
-        <div class="card-header">
-          <div class="card-title"><span class="icon">📡</span> Wave Observations</div>
-          <div class="card-badge" id="buoy-badge" style="background:rgba(0,212,170,0.15);color:#00d4aa">MODEL</div>
+      <!-- Waves + Wind (shared row) -->
+      <div class="card-row" style="display:flex;gap:12px">
+        <div class="card" id="card-buoy" style="flex:1;min-width:0">
+          <div class="card-header">
+            <div class="card-title"><span class="icon">📡</span> Waves</div>
+            <div class="card-badge" id="buoy-badge" style="background:rgba(0,212,170,0.15);color:#00d4aa">MODEL</div>
+          </div>
+          <div class="card-body" id="buoy-body">
+            <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+          </div>
         </div>
-        <div class="card-body" id="buoy-body">
-          <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+        <div class="card" id="card-wind" style="flex:1;min-width:0">
+          <div class="card-header">
+            <div class="card-title"><span class="icon">💨</span> Wind</div>
+            <div class="card-badge" id="wind-badge" style="background:rgba(0,200,83,0.15);color:#00c853">--</div>
+          </div>
+          <div class="card-body" id="wind-body">
+            <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
+          </div>
         </div>
       </div>
 
