@@ -584,6 +584,7 @@ async function loadBuoy() {
       isObserved ? 'rgba(0,212,170,0.15)' : 'rgba(126,184,212,0.15)');
 
     setHTML('buoy-body', `
+      <div id="buoy-quality" style="margin-bottom:8px"></div>
       <div class="stat-row">
         <span class="stat-value" style="color:#00d4aa">${wvhtFt}</span>
         ${wvhtFt !== '—' ? '<span class="stat-unit">ft</span>' : ''}
@@ -607,6 +608,7 @@ async function loadBuoy() {
       </div>
       <div class="buoy-source">${srcLink}</div>
     `);
+    renderQuality();
 
     // ── Water Temperature card ─────────────────────────────────────────────
     const gearRec = sstF !== '—' ? wetsuitRec(parseFloat(sstF)) : null;
@@ -790,8 +792,7 @@ function setupSwellChart(pts) {
   canvas.addEventListener('mouseleave', hideTip);
 }
 
-// ─── Swell breakdown (Surfline-style stacked rows with colored arrows) ───────
-const SWELL_COLORS = ['#ff9800', '#e64e4e', '#1e90ff']; // orange, red, blue
+// ─── Swell breakdown (stacked rows with direction arrows) ───────────────────
 
 function swellBreakdownHTML(swells) {
   // Always show all components — don't filter by height. Sort longest period first.
@@ -803,14 +804,13 @@ function swellBreakdownHTML(swells) {
 
   const rows = sorted.map((s, i) => {
     const rotDeg = (s.dir + 180) % 360;
-    const color = SWELL_COLORS[i] || SWELL_COLORS[2];
     const htStr = s.ht.toFixed(1);
     const isPrimary = i === 0;
     return `
       <div style="display:flex;align-items:center;gap:10px;padding:6px 0;${i < sorted.length - 1 ? 'border-bottom:1px solid rgba(255,255,255,0.05)' : ''}">
         <span style="font-size:${isPrimary ? '16px' : '14px'};font-weight:${isPrimary ? '700' : '500'};color:var(--text-primary);font-family:monospace;min-width:52px">${htStr}ft</span>
         <span style="font-size:${isPrimary ? '14px' : '13px'};color:var(--text-secondary);font-family:monospace;min-width:30px">${Math.round(s.per)}s</span>
-        <span style="display:inline-block;width:18px;height:18px;border-radius:4px;background:${color};text-align:center;line-height:18px;font-size:12px;transform:rotate(${rotDeg}deg)">↑</span>
+        <span style="display:inline-block;transform:rotate(${rotDeg}deg);font-size:16px;line-height:1;color:#1e90ff">↑</span>
         <span style="font-size:13px;color:var(--text-secondary);font-family:monospace;min-width:36px">${degToCompass(s.dir)}</span>
         <span style="font-size:12px;color:var(--text-muted);font-family:monospace">${Math.round(s.dir)}°</span>
       </div>`;
@@ -863,27 +863,26 @@ function renderQuality() {
   const q = evaluateQuality(QSTATE.swell, QSTATE.windMph, BEACH_FACING());
   const color = QUALITY_COLORS[q.label];
 
-  const badge = document.getElementById('quality-badge');
+  // Render into the buoy card's quality slot
+  const slot = document.getElementById('buoy-quality');
+  if (!slot) return;
+  const pct = Math.round(q.score * 10);
+  slot.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+      <span style="font-size:18px;font-weight:bold;font-family:monospace;color:${color}">${q.label}</span>
+      <span style="font-size:11px;color:var(--text-secondary);font-family:monospace">${q.score.toFixed(1)} / 10</span>
+    </div>
+    <div style="height:4px;border-radius:2px;background:rgba(155,155,155,0.15);overflow:hidden">
+      <div style="width:${pct}%;height:100%;border-radius:2px;background:${color}"></div>
+    </div>`;
+
+  // Update badge on the buoy card header
+  const badge = document.getElementById('buoy-badge');
   if (badge) {
     badge.textContent = q.label;
     badge.style.color = color;
-    badge.style.background = color + '26'; // ~15% alpha
+    badge.style.background = color + '26';
   }
-
-  const pct = Math.round(q.score * 10);
-  setHTML('quality-body', `
-    <div style="display:flex;align-items:center;gap:14px">
-      <span style="font-size:22px;font-weight:bold;font-family:monospace;color:${color}">${q.label}</span>
-      <span style="font-size:12px;color:var(--text-secondary);font-family:monospace">${q.score.toFixed(1)} / 10</span>
-    </div>
-    <div style="margin-top:5px;height:5px;border-radius:3px;background:rgba(155,155,155,0.15);overflow:hidden">
-      <div style="width:${pct}%;height:100%;border-radius:3px;background:${color}"></div>
-    </div>
-    <div style="margin-top:4px;font-size:10px;color:var(--text-muted);font-family:monospace">
-      swell ${QSTATE.swell.ht?.toFixed(1) ?? '—'} ft @ ${QSTATE.swell.per?.toFixed(0) ?? '—'}s
-      · wind ${QSTATE.windMph != null ? QSTATE.windMph.toFixed(0) + ' mph' : '—'}${BEACH_FACING() == null ? ' · direction ignored (custom spot)' : ''}
-    </div>
-  `);
 }
 
 // ─── 2. Open-Meteo Marine (Swell Forecast) ────────────────────────────────────
@@ -2289,7 +2288,6 @@ async function refreshAll() {
   QSTATE.windMph = null;
   EXTENDED_DATA.swell = null;
   EXTENDED_DATA.wind  = null;
-  setHTML('quality-body',       loadingHTML());
   setHTML('7day-body',          loadingHTML());
   setHTML('24h-body',           loadingHTML());
   setHTML('buoy-body',          loadingHTML());
