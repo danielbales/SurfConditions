@@ -2398,10 +2398,10 @@ function renderBuoyMap(buoys) {
         const ay = parseFloat(by) - Math.cos(rad) * len;
         buoyMarkers += `<line x1="${bx}" y1="${by}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="#1e90ff" stroke-width="2" marker-end="url(#arrowSwell)"/>`;
       }
-      // 2. Wind (green dashed) - direction wind is blowing from
+      // 2. Wind (green dashed) - direction wind is blowing TO
       if (b.wdir != null && b.wspd != null && b.wspd > 1) {
         const len = 14;
-        const rad = (b.wdir * Math.PI) / 180;
+        const rad = ((b.wdir + 180) * Math.PI) / 180;
         const ax = parseFloat(bx) + Math.sin(rad) * len;
         const ay = parseFloat(by) - Math.cos(rad) * len;
         const wc = b.wspd < 10 ? '#00c853' : b.wspd < 20 ? '#ffeb3b' : '#f44336';
