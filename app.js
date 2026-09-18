@@ -2389,28 +2389,23 @@ function renderBuoyMap(buoys) {
         buoyMarkers += `<text x="${labelX}" y="${parseFloat(by) + 2 + li * 10}" text-anchor="${anchor}" fill="#ccd6e0" font-size="8" font-family="monospace" font-weight="600">${line}</text>`;
       });
 
-      // Swell direction arrow (blue, shows where waves are heading)
+      // Two arrows per buoy:
+      // 1. Swell (blue solid) - direction waves are traveling
       if (b.mwd != null && b.wvHt != null) {
-        const arrowLen = 12;
+        const len = 14;
         const rad = ((b.mwd + 180) * Math.PI) / 180;
-        const ax = parseFloat(bx) + Math.sin(rad) * arrowLen;
-        const ay = parseFloat(by) - Math.cos(rad) * arrowLen;
-        buoyMarkers += `<line x1="${bx}" y1="${by}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="#1e90ff" stroke-width="1.5" marker-end="url(#arrowSwell)"/>`;
+        const ax = parseFloat(bx) + Math.sin(rad) * len;
+        const ay = parseFloat(by) - Math.cos(rad) * len;
+        buoyMarkers += `<line x1="${bx}" y1="${by}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="#1e90ff" stroke-width="2" marker-end="url(#arrowSwell)"/>`;
       }
-
-      // Wind arrow (green/yellow/red, points direction wind is blowing TO)
+      // 2. Wind (green dashed) - direction wind is blowing from
       if (b.wdir != null && b.wspd != null && b.wspd > 1) {
-        const windLen = Math.min(10 + b.wspd * 0.6, 22);
+        const len = 14;
         const rad = (b.wdir * Math.PI) / 180;
-        const ox = parseFloat(bx), oy = parseFloat(by);
-        const ax = ox + Math.sin(rad) * windLen;
-        const ay = oy - Math.cos(rad) * windLen;
-        const windColor = b.wspd < 10 ? '#00c853' : b.wspd < 20 ? '#ffeb3b' : '#f44336';
-        // Dashed tail + solid arrowhead tip
-        const midX = ox + Math.sin(rad) * (windLen * 0.6);
-        const midY = oy - Math.cos(rad) * (windLen * 0.6);
-        buoyMarkers += `<line x1="${ox}" y1="${oy}" x2="${midX.toFixed(1)}" y2="${midY.toFixed(1)}" stroke="${windColor}" stroke-width="1.5" stroke-dasharray="2,2" opacity="0.7"/>`;
-        buoyMarkers += `<line x1="${midX.toFixed(1)}" y1="${midY.toFixed(1)}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="${windColor}" stroke-width="1.5" opacity="0.7" marker-end="url(#arrowWind)"/>`;
+        const ax = parseFloat(bx) + Math.sin(rad) * len;
+        const ay = parseFloat(by) - Math.cos(rad) * len;
+        const wc = b.wspd < 10 ? '#00c853' : b.wspd < 20 ? '#ffeb3b' : '#f44336';
+        buoyMarkers += `<line x1="${bx}" y1="${by}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="${wc}" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrowWind)"/>`;
       }
     } else {
       buoyMarkers += `<text x="${parseFloat(bx) + 6}" y="${parseFloat(by) + 3}" fill="#555" font-size="7" font-family="monospace">${b.name}</text>`;
