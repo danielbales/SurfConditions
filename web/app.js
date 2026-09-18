@@ -935,13 +935,13 @@ function renderQuality() {
   // Wind type badge
   const wtColor = q.windType ? WIND_TYPE_COLORS[q.windType] : null;
   const windBadge = q.windType
-    ? `<span style="font-size:9px;padding:2px 5px;border-radius:3px;background:${wtColor}20;color:${wtColor};font-family:monospace">${q.windType}</span>`
+    ? `<span style="font-size:9px;padding:2px 5px;border-radius:3px;background:${wtColor}20;color:${wtColor};font-family:monospace">${q.windType} wind</span>`
     : '';
 
   // Consistency badge
   const ccColor = q.consistency ? CONSISTENCY_COLORS[q.consistency] : null;
   const consBadge = q.consistency
-    ? `<span style="font-size:9px;padding:2px 5px;border-radius:3px;background:${ccColor}20;color:${ccColor};font-family:monospace">${q.consistency}</span>`
+    ? `<span style="font-size:9px;padding:2px 5px;border-radius:3px;background:${ccColor}20;color:${ccColor};font-family:monospace">${q.consistency} consistency</span>`
     : '';
 
   // Peak hours (needs both swell + wind hourly data)
