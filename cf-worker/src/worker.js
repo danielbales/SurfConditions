@@ -303,41 +303,45 @@ export default {
             'Content-Type': 'application/json',
           });
         }
-        const metCols = metLines[2].trim().split(/\s+/);
         // Columns: YY MM DD hh mm WDIR WSPD GST WVHT DPD APD MWD PRES ATMP WTMP DEWP VIS PTDY TIDE
         const mm = (v) => (v === 'MM' ? null : parseFloat(v));
-        const metYear = metCols[0];
-        const metMonth = metCols[1];
-        const metDay = metCols[2];
-        const metHour = metCols[3];
-        const metMin = metCols[4];
+
+        // Latest line for wind/temp (always present even when wave is MM)
+        const latestCols = metLines[2].trim().split(/\s+/);
+        const metYear = latestCols[0], metMonth = latestCols[1], metDay = latestCols[2];
+        const metHour = latestCols[3], metMin = latestCols[4];
         const time = `${metYear}-${metMonth}-${metDay}T${metHour}:${metMin}:00Z`;
+        const wdir = mm(latestCols[5]);
+        const wspd = mm(latestCols[6]);
+        const gst  = mm(latestCols[7]);
+        const wtmp = mm(latestCols[14]);
 
-        const wdir = mm(metCols[5]);
-        const wspd = mm(metCols[6]);
-        const gst  = mm(metCols[7]);
-        const wvht = mm(metCols[8]);
-        const dpd  = mm(metCols[9]);
-        const mwd  = mm(metCols[11]);
-        const wtmp = mm(metCols[14]);
+        // Scan recent lines for first one with actual wave data (WVHT != MM)
+        let wvht = null, dpd = null, mwd = null;
+        for (let li = 2; li < Math.min(metLines.length, 14); li++) {
+          const c = metLines[li].trim().split(/\s+/);
+          if (c[8] && c[8] !== 'MM') {
+            wvht = mm(c[8]);
+            dpd  = mm(c[9]);
+            mwd  = mm(c[11]);
+            break;
+          }
+        }
 
-        // Parse spectral file
+        // Parse spectral file — scan for first line with wave data
         let swell = null;
         let windWave = null;
         if (specRes.ok) {
           const specText = await specRes.text();
           const specLines = specText.trim().split('\n');
-          if (specLines.length >= 3) {
-            const specCols = specLines[2].trim().split(/\s+/);
+          for (let li = 2; li < Math.min(specLines.length, 14); li++) {
+            const specCols = specLines[li].trim().split(/\s+/);
             // Columns: YY MM DD hh mm WVHT SwH SwP SwD WWH WWP WWD STEEPNESS APD MWD
-            const swH  = mm(specCols[6]);
-            const swP  = mm(specCols[7]);
-            const swD  = mm(specCols[8]);
-            const wwH  = mm(specCols[9]);
-            const wwP  = mm(specCols[10]);
-            const wwD  = mm(specCols[11]);
-            swell    = { height_m: swH, period_s: swP, direction: swD };
-            windWave = { height_m: wwH, period_s: wwP, direction: wwD };
+            if (specCols[5] && specCols[5] !== 'MM') {
+              swell    = { height_m: mm(specCols[6]), period_s: mm(specCols[7]), direction: mm(specCols[8]) };
+              windWave = { height_m: mm(specCols[9]), period_s: mm(specCols[10]), direction: mm(specCols[11]) };
+              break;
+            }
           }
         }
 
