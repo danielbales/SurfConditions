@@ -1141,9 +1141,9 @@ function renderWindForecast(hourly, currentIdx) {
   const gusts  = hourly.wind_gusts_10m;
   const dirs   = hourly.wind_direction_10m;
 
-  // Collect next 48 hours of data points starting from current hour
+  // Collect all forecast hours (7 days to match swell forecast)
   const pts = [];
-  for (let i = currentIdx; i < times.length && pts.length < 48; i++) {
+  for (let i = currentIdx; i < times.length; i++) {
     pts.push({ t: new Date(times[i]), spd: speeds[i] ?? 0, gst: gusts[i] ?? 0, dir: dirs[i] ?? 0 });
   }
   if (pts.length < 2) { setHTML('wind-forecast-body', errorHTML('Not enough forecast data')); return; }
@@ -1177,15 +1177,13 @@ function renderWindForecast(hourly, currentIdx) {
     yLabels += `<line x1="${PL}" y1="${ty(v).toFixed(1)}" x2="${W - PR}" y2="${ty(v).toFixed(1)}" stroke="#1a2e45" stroke-width="0.5"/>`;
   }
 
-  // X-axis: one tick every 6 hours
+  // X-axis: tick at midnight for each day
   let xLabels = '';
   const now = new Date();
   for (const p of pts) {
-    if (p.t.getHours() % 6 === 0) {
+    if (p.t.getHours() === 0) {
       const x = tx(p.t).toFixed(1);
-      const label = p.t.getHours() === 0
-        ? p.t.toLocaleDateString([], { weekday: 'short' })
-        : p.t.getHours() + 'h';
+      const label = p.t.toLocaleDateString([], { weekday: 'short' });
       xLabels += `<line x1="${x}" y1="${PT}" x2="${x}" y2="${PT + cH}" stroke="#1a2e45" stroke-width="0.5"/>`;
       xLabels += `<text x="${x}" y="${H - 3}" text-anchor="middle" fill="#607d8b" font-size="8" font-family="monospace">${label}</text>`;
     }
