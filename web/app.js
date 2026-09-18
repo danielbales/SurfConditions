@@ -2394,14 +2394,19 @@ function renderBuoyMap(buoys) {
         buoyMarkers += `<line x1="${bx}" y1="${by}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="#1e90ff" stroke-width="1.5" marker-end="url(#arrowSwell)"/>`;
       }
 
-      // Wind arrow (green/yellow/red, shows where wind is blowing TO)
+      // Wind arrow (green/yellow/red, points direction wind is blowing TO)
       if (b.wdir != null && b.wspd != null && b.wspd > 1) {
-        const windLen = Math.min(8 + b.wspd * 0.4, 18); // scale with speed
-        const rad = (b.wdir * Math.PI) / 180; // wind direction = where it comes from, arrow points downwind
-        const ax = parseFloat(bx) + Math.sin(rad) * windLen;
-        const ay = parseFloat(by) - Math.cos(rad) * windLen;
+        const windLen = Math.min(10 + b.wspd * 0.6, 22);
+        const rad = (b.wdir * Math.PI) / 180;
+        const ox = parseFloat(bx), oy = parseFloat(by);
+        const ax = ox + Math.sin(rad) * windLen;
+        const ay = oy - Math.cos(rad) * windLen;
         const windColor = b.wspd < 10 ? '#00c853' : b.wspd < 20 ? '#ffeb3b' : '#f44336';
-        buoyMarkers += `<line x1="${bx}" y1="${by}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="${windColor}" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#arrowWind)"/>`;
+        // Dashed tail + solid arrowhead tip
+        const midX = ox + Math.sin(rad) * (windLen * 0.6);
+        const midY = oy - Math.cos(rad) * (windLen * 0.6);
+        buoyMarkers += `<line x1="${ox}" y1="${oy}" x2="${midX.toFixed(1)}" y2="${midY.toFixed(1)}" stroke="${windColor}" stroke-width="1.5" stroke-dasharray="2,2" opacity="0.7"/>`;
+        buoyMarkers += `<line x1="${midX.toFixed(1)}" y1="${midY.toFixed(1)}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="${windColor}" stroke-width="1.5" opacity="0.7" marker-end="url(#arrowWind)"/>`;
       }
     } else {
       buoyMarkers += `<text x="${parseFloat(bx) + 6}" y="${parseFloat(by) + 3}" fill="#555" font-size="7" font-family="monospace">${b.name}</text>`;
@@ -2420,8 +2425,8 @@ function renderBuoyMap(buoys) {
       <marker id="arrowSwell" markerWidth="5" markerHeight="4" refX="5" refY="2" orient="auto">
         <polygon points="0 0, 5 2, 0 4" fill="#1e90ff"/>
       </marker>
-      <marker id="arrowWind" markerWidth="4" markerHeight="3" refX="4" refY="1.5" orient="auto">
-        <polygon points="0 0, 4 1.5, 0 3" fill="#00c853"/>
+      <marker id="arrowWind" markerWidth="5" markerHeight="4" refX="5" refY="2" orient="auto" markerUnits="strokeWidth">
+        <polygon points="0 0, 5 2, 0 4" fill="#00c853" class="wind-arrow-fill"/>
       </marker>
     </defs>
     <rect width="${W}" height="${H}" fill="#0d1f35" rx="6"/>
