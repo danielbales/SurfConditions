@@ -2275,6 +2275,161 @@ function render24HourHeatmap() {
     ${legend}`);
 }
 
+// ─── Live Buoy Map ───────────────────────────────────────────────────────────
+const MAP_BUOYS = [
+  { id: '46013', name: 'Bodega Bay',    lat: 38.235, lon: -123.317 },
+  { id: '46214', name: 'Pt Reyes',      lat: 37.944, lon: -123.466 },
+  { id: '46237', name: 'SF Bar',        lat: 37.788, lon: -122.634 },
+  { id: '46026', name: 'San Francisco', lat: 37.75,  lon: -122.838 },
+  { id: '46012', name: 'Half Moon Bay', lat: 37.356, lon: -122.881 },
+  { id: '46042', name: 'Monterey',      lat: 36.787, lon: -122.408 },
+  { id: '46236', name: 'Mty Canyon',    lat: 36.759, lon: -121.95 },
+  { id: '46239', name: 'Pt Sur',        lat: 36.342, lon: -122.11 },
+  { id: '46028', name: 'Cape San Martin', lat: 35.763, lon: -121.9 },
+];
+
+// Simplified CA coastline (lat, lon) - south to north
+const COASTLINE = [
+  [35.46,-120.95],[35.64,-121.14],[35.77,-121.32],[35.89,-121.45],
+  [36.06,-121.57],[36.23,-121.80],[36.37,-121.90],[36.55,-121.93],
+  [36.60,-121.89],[36.62,-121.80],[36.80,-121.79],[36.87,-121.79],
+  [36.95,-122.02],[37.00,-122.05],[37.10,-122.33],[37.18,-122.39],
+  [37.49,-122.45],[37.62,-122.49],[37.79,-122.51],[37.83,-122.48],
+  [37.86,-122.50],[37.93,-122.58],[37.96,-122.70],[37.99,-122.97],
+  [38.06,-123.00],[38.24,-123.06],[38.36,-123.07],[38.45,-123.10],
+];
+
+async function loadBuoyMap() {
+  try {
+    // Fetch all buoys in parallel via worker proxy
+    const results = await Promise.allSettled(
+      MAP_BUOYS.map(b =>
+        fetch(`${WORKER_URL}/proxy/ndbc/${b.id}`)
+          .then(r => r.ok ? r.json() : null)
+          .catch(() => null)
+      )
+    );
+
+    const buoyData = MAP_BUOYS.map((b, i) => {
+      const r = results[i].status === 'fulfilled' ? results[i].value : null;
+      if (!r || !r.ok) return { ...b, offline: true };
+
+      // Scan for wave data (worker already does this, but guard nulls)
+      const wv = r.wave || {};
+      const wind = r.wind || {};
+      return {
+        ...b,
+        wvHt: wv.height_m != null ? (wv.height_m * 3.28084) : null,
+        dpd: wv.period_s,
+        mwd: wv.direction,
+        wspd: wind.speed_ms != null ? (wind.speed_ms * 1.94384) : null,
+        wdir: wind.direction,
+        gust: wind.gust_ms != null ? (wind.gust_ms * 1.94384) : null,
+      };
+    });
+
+    renderBuoyMap(buoyData);
+  } catch (e) {
+    setHTML('buoy-map-body', errorHTML('Buoy map unavailable: ' + e.message));
+  }
+}
+
+function renderBuoyMap(buoys) {
+  // Map bounds
+  const LAT_MIN = 35.3, LAT_MAX = 38.6;
+  const LON_MIN = -124.0, LON_MAX = -120.5;
+  const W = 340, H = 420, PAD = 10;
+
+  const px = (lon) => PAD + ((lon - LON_MIN) / (LON_MAX - LON_MIN)) * (W - PAD * 2);
+  const py = (lat) => PAD + ((LAT_MAX - lat) / (LAT_MAX - LAT_MIN)) * (H - PAD * 2);
+
+  // Draw coastline
+  const coastPath = COASTLINE.map((p, i) =>
+    `${i === 0 ? 'M' : 'L'}${px(p[1]).toFixed(1)},${py(p[0]).toFixed(1)}`
+  ).join(' ');
+
+  // Fill land area (close path to right edge)
+  const lastPt = COASTLINE[COASTLINE.length - 1];
+  const firstPt = COASTLINE[0];
+  const landPath = coastPath
+    + ` L${W},${py(lastPt[0]).toFixed(1)} L${W},${py(firstPt[0]).toFixed(1)} Z`;
+
+  // Active spot marker
+  const spotX = px(LNG()).toFixed(1);
+  const spotY = py(LAT()).toFixed(1);
+
+  // Buoy labels
+  let buoyMarkers = '';
+  for (const b of buoys) {
+    const bx = px(b.lon).toFixed(1);
+    const by = py(b.lat).toFixed(1);
+    const isActive = b.id === ACTIVE?.buoyId;
+
+    // Dot
+    const dotColor = b.offline ? '#555' : b.wvHt != null ? '#00d4aa' : '#ffb300';
+    const dotR = isActive ? 5 : 3.5;
+    buoyMarkers += `<circle cx="${bx}" cy="${by}" r="${dotR}" fill="${dotColor}" stroke="${isActive ? '#fff' : 'none'}" stroke-width="${isActive ? 1.5 : 0}"/>`;
+
+    // Data label
+    if (!b.offline) {
+      const lines = [];
+      if (b.wvHt != null) lines.push(`${b.wvHt.toFixed(1)}ft ${b.dpd ?? ''}s`);
+      if (b.wspd != null) lines.push(`${b.wspd.toFixed(0)}kts ${b.wdir != null ? degToCompass(b.wdir) : ''}`);
+
+      // Position label to avoid coastline overlap
+      const labelX = parseFloat(bx) < W / 2 ? parseFloat(bx) - 6 : parseFloat(bx) + 6;
+      const anchor = parseFloat(bx) < W / 2 ? 'end' : 'start';
+
+      buoyMarkers += `<text x="${labelX}" y="${parseFloat(by) - 10}" text-anchor="${anchor}" fill="#8fa4b8" font-size="7" font-family="monospace">${b.name}</text>`;
+      lines.forEach((line, li) => {
+        buoyMarkers += `<text x="${labelX}" y="${parseFloat(by) + 2 + li * 10}" text-anchor="${anchor}" fill="#ccd6e0" font-size="8" font-family="monospace" font-weight="600">${line}</text>`;
+      });
+
+      // Wind arrow
+      if (b.wdir != null && b.wspd != null && b.wspd > 0) {
+        const arrowLen = 10;
+        const rad = (b.wdir * Math.PI) / 180;
+        const ax = parseFloat(bx) + Math.sin(rad) * arrowLen;
+        const ay = parseFloat(by) - Math.cos(rad) * arrowLen;
+        const windColor = b.wspd < 10 ? '#00c853' : b.wspd < 20 ? '#ffeb3b' : '#f44336';
+        buoyMarkers += `<line x1="${bx}" y1="${by}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="${windColor}" stroke-width="1.5" marker-end="url(#arrowhead)"/>`;
+      }
+    } else {
+      buoyMarkers += `<text x="${parseFloat(bx) + 6}" y="${parseFloat(by) + 3}" fill="#555" font-size="7" font-family="monospace">${b.name}</text>`;
+    }
+  }
+
+  // Latitude labels
+  let latLabels = '';
+  for (let lat = 36; lat <= 38; lat++) {
+    latLabels += `<text x="3" y="${py(lat).toFixed(1)}" fill="#3a5068" font-size="7" font-family="monospace" dominant-baseline="middle">${lat}°N</text>`;
+    latLabels += `<line x1="${PAD}" y1="${py(lat).toFixed(1)}" x2="${W - PAD}" y2="${py(lat).toFixed(1)}" stroke="#1a2e45" stroke-width="0.5" stroke-dasharray="2,4"/>`;
+  }
+
+  const svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
+    <defs>
+      <marker id="arrowhead" markerWidth="5" markerHeight="4" refX="5" refY="2" orient="auto">
+        <polygon points="0 0, 5 2, 0 4" fill="#ccc"/>
+      </marker>
+    </defs>
+    <rect width="${W}" height="${H}" fill="#0d1f35" rx="6"/>
+    ${latLabels}
+    <path d="${landPath}" fill="#152238" stroke="none"/>
+    <path d="${coastPath}" fill="none" stroke="#2a4a6b" stroke-width="1.5" stroke-linejoin="round"/>
+    <circle cx="${spotX}" cy="${spotY}" r="4" fill="none" stroke="#ff6b6b" stroke-width="1.5"/>
+    <circle cx="${spotX}" cy="${spotY}" r="1.5" fill="#ff6b6b"/>
+    ${buoyMarkers}
+  </svg>`;
+
+  setHTML('buoy-map-body', svg
+    + `<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:8px;color:var(--text-muted);font-family:monospace">`
+    + `<span><span style="display:inline-block;width:6px;height:6px;border-radius:3px;background:#00d4aa;vertical-align:middle;margin-right:3px"></span>Wave data</span>`
+    + `<span><span style="display:inline-block;width:6px;height:6px;border-radius:3px;background:#ffb300;vertical-align:middle;margin-right:3px"></span>Wind only</span>`
+    + `<span><span style="display:inline-block;width:6px;height:6px;border-radius:50%;border:1.5px solid #ff6b6b;vertical-align:middle;margin-right:3px"></span>Your spot</span>`
+    + `</div>`
+    + `<div class="buoy-source"><a href="https://www.ndbc.noaa.gov/" target="_blank" rel="noopener" class="src-link">NDBC Buoy Network ↗</a></div>`);
+}
+
 // ─── Refresh all ──────────────────────────────────────────────────────────────
 async function refreshAll() {
   if (!ACTIVE) return;
@@ -2291,6 +2446,7 @@ async function refreshAll() {
   setHTML('7day-body',          loadingHTML());
   setHTML('24h-body',           loadingHTML());
   setHTML('buoy-body',          loadingHTML());
+  setHTML('buoy-map-body',      loadingHTML());
   setHTML('swell-body',         loadingHTML());
   setHTML('wind-body',          loadingHTML());
   setHTML('wind-forecast-body', loadingHTML());
@@ -2301,6 +2457,7 @@ async function refreshAll() {
 
   await Promise.allSettled([
     loadBuoy(),
+    loadBuoyMap(),
     loadSwell(),
     loadWeather(),
     loadSunrise(),
