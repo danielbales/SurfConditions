@@ -2385,13 +2385,23 @@ function renderBuoyMap(buoys) {
         buoyMarkers += `<text x="${labelX}" y="${parseFloat(by) + 2 + li * 10}" text-anchor="${anchor}" fill="#ccd6e0" font-size="8" font-family="monospace" font-weight="600">${line}</text>`;
       });
 
-      // Swell direction arrow (shows where waves are coming FROM)
+      // Swell direction arrow (blue, shows where waves are heading)
       if (b.mwd != null && b.wvHt != null) {
         const arrowLen = 12;
-        const rad = ((b.mwd + 180) * Math.PI) / 180; // +180 to point toward shore
+        const rad = ((b.mwd + 180) * Math.PI) / 180;
         const ax = parseFloat(bx) + Math.sin(rad) * arrowLen;
         const ay = parseFloat(by) - Math.cos(rad) * arrowLen;
-        buoyMarkers += `<line x1="${bx}" y1="${by}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="#1e90ff" stroke-width="1.5" marker-end="url(#arrowhead)"/>`;
+        buoyMarkers += `<line x1="${bx}" y1="${by}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="#1e90ff" stroke-width="1.5" marker-end="url(#arrowSwell)"/>`;
+      }
+
+      // Wind arrow (green/yellow/red, shows where wind is blowing TO)
+      if (b.wdir != null && b.wspd != null && b.wspd > 1) {
+        const windLen = Math.min(8 + b.wspd * 0.4, 18); // scale with speed
+        const rad = (b.wdir * Math.PI) / 180; // wind direction = where it comes from, arrow points downwind
+        const ax = parseFloat(bx) + Math.sin(rad) * windLen;
+        const ay = parseFloat(by) - Math.cos(rad) * windLen;
+        const windColor = b.wspd < 10 ? '#00c853' : b.wspd < 20 ? '#ffeb3b' : '#f44336';
+        buoyMarkers += `<line x1="${bx}" y1="${by}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="${windColor}" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#arrowWind)"/>`;
       }
     } else {
       buoyMarkers += `<text x="${parseFloat(bx) + 6}" y="${parseFloat(by) + 3}" fill="#555" font-size="7" font-family="monospace">${b.name}</text>`;
@@ -2407,8 +2417,11 @@ function renderBuoyMap(buoys) {
 
   const svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
     <defs>
-      <marker id="arrowhead" markerWidth="5" markerHeight="4" refX="5" refY="2" orient="auto">
-        <polygon points="0 0, 5 2, 0 4" fill="#ccc"/>
+      <marker id="arrowSwell" markerWidth="5" markerHeight="4" refX="5" refY="2" orient="auto">
+        <polygon points="0 0, 5 2, 0 4" fill="#1e90ff"/>
+      </marker>
+      <marker id="arrowWind" markerWidth="4" markerHeight="3" refX="4" refY="1.5" orient="auto">
+        <polygon points="0 0, 4 1.5, 0 3" fill="#00c853"/>
       </marker>
     </defs>
     <rect width="${W}" height="${H}" fill="#0d1f35" rx="6"/>
@@ -2421,8 +2434,9 @@ function renderBuoyMap(buoys) {
   </svg>`;
 
   setHTML('buoy-map-body', svg
-    + `<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:8px;color:var(--text-muted);font-family:monospace">`
-    + `<span><span style="display:inline-block;width:8px;height:0;border-top:2px solid #1e90ff;vertical-align:middle;margin-right:3px"></span>Swell dir</span>`
+    + `<div style="display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:6px;font-size:8px;color:var(--text-muted);font-family:monospace">`
+    + `<span><span style="display:inline-block;width:10px;height:0;border-top:2px solid #1e90ff;vertical-align:middle;margin-right:3px"></span>Swell</span>`
+    + `<span><span style="display:inline-block;width:10px;height:0;border-top:1px dashed #00c853;vertical-align:middle;margin-right:3px"></span>Wind</span>`
     + `<span><span style="display:inline-block;width:6px;height:6px;border-radius:3px;background:#00d4aa;vertical-align:middle;margin-right:3px"></span>Wave data</span>`
     + `<span><span style="display:inline-block;width:6px;height:6px;border-radius:3px;background:#ffb300;vertical-align:middle;margin-right:3px"></span>Wind only</span>`
     + `<span><span style="display:inline-block;width:6px;height:6px;border-radius:50%;border:1.5px solid #ff6b6b;vertical-align:middle;margin-right:3px"></span>Your spot</span>`
