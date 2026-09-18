@@ -932,40 +932,14 @@ function renderQuality() {
   if (!slot) return;
   const pct = Math.round(q.score * 10);
 
-  // Wind type badge
-  const wtColor = q.windType ? WIND_TYPE_COLORS[q.windType] : null;
-  const windBadge = q.windType
-    ? `<span style="font-size:9px;padding:2px 5px;border-radius:3px;background:${wtColor}20;color:${wtColor};font-family:monospace">${q.windType} wind</span>`
-    : '';
-
-  // Consistency badge
-  const ccColor = q.consistency ? CONSISTENCY_COLORS[q.consistency] : null;
-  const consBadge = q.consistency
-    ? `<span style="font-size:9px;padding:2px 5px;border-radius:3px;background:${ccColor}20;color:${ccColor};font-family:monospace">${q.consistency} consistency</span>`
-    : '';
-
-  // Peak hours (needs both swell + wind hourly data)
-  let peakHTML = '';
-  if (EXTENDED_DATA.swell && EXTENDED_DATA.wind) {
-    const peak = computePeakHours(EXTENDED_DATA.swell, EXTENDED_DATA.wind, BEACH_FACING());
-    if (peak) {
-      const pc = QUALITY_COLORS[peak.label];
-      peakHTML = `<div style="margin-top:4px;font-size:9px;color:var(--text-muted);font-family:monospace">
-        Peak <span style="color:${pc};font-weight:600">${fmtHourShort(peak.start)}-${fmtHourShort(peak.end)}</span>
-      </div>`;
-    }
-  }
-
   slot.innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
       <span style="font-size:18px;font-weight:bold;font-family:monospace;color:${color}">${q.label}</span>
       <span style="font-size:11px;color:var(--text-secondary);font-family:monospace">${q.score.toFixed(1)}/10</span>
     </div>
-    <div style="height:4px;border-radius:2px;background:rgba(155,155,155,0.15);overflow:hidden;margin-bottom:5px">
+    <div style="height:4px;border-radius:2px;background:rgba(155,155,155,0.15);overflow:hidden">
       <div style="width:${pct}%;height:100%;border-radius:2px;background:${color}"></div>
-    </div>
-    <div style="display:flex;gap:4px;flex-wrap:wrap">${windBadge}${consBadge}</div>
-    ${peakHTML}`;
+    </div>`;
 
   const badge = document.getElementById('buoy-badge');
   if (badge) {
