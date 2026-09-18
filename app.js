@@ -583,8 +583,24 @@ async function loadBuoy() {
       isObserved ? '#00d4aa' : '#7eb8d4',
       isObserved ? 'rgba(0,212,170,0.15)' : 'rgba(126,184,212,0.15)');
 
+    // Period classification
+    const dpdNum = parseFloat(dpd);
+    const perTag = isNaN(dpdNum) ? null
+      : dpdNum >= 16 ? { label: 'Long-Period Groundswell', color: '#9b6dff', icon: '🟣' }
+      : dpdNum >= 12 ? { label: 'Groundswell', color: '#1e90ff', icon: '🔵' }
+      : dpdNum >= 8  ? { label: 'Mid-Period Swell', color: '#00d4aa', icon: '🟢' }
+      :                { label: 'Wind Swell', color: '#ffb300', icon: '🟡' };
+
+    const perColor = perTag ? perTag.color : 'var(--text-primary)';
+    const perBadge = perTag && dpdNum >= 12
+      ? `<div style="margin-top:6px;padding:5px 8px;border-radius:6px;background:${perTag.color}15;border:1px solid ${perTag.color}40;font-size:11px;font-family:monospace;color:${perTag.color}">
+          ${perTag.icon} ${perTag.label} - ${dpd}s period${dpdNum >= 16 ? ' - rare event' : ''}
+        </div>`
+      : '';
+
     setHTML('buoy-body', `
       <div id="buoy-quality" style="margin-bottom:8px"></div>
+      ${perBadge}
       <div class="stat-row">
         <span class="stat-value" style="color:#00d4aa">${wvhtFt}</span>
         ${wvhtFt !== '—' ? '<span class="stat-unit">ft</span>' : ''}
@@ -593,7 +609,8 @@ async function loadBuoy() {
       <div class="stats-grid-3">
         <div class="stat-cell">
           <div class="label">Period</div>
-          <div class="value">${dpd}<span style="font-size:12px;color:var(--text-muted)">s</span></div>
+          <div class="value" style="color:${perColor}">${dpd}<span style="font-size:12px;color:var(--text-muted)">s</span></div>
+          <div class="sub" style="color:${perColor}">${perTag ? perTag.label.split(' ')[0] : ''}</div>
         </div>
         <div class="stat-cell">
           <div class="label">Swell</div>
