@@ -492,6 +492,7 @@ function wetsuitRec(tempF) {
 // Stores latest NDBC observations for accuracy tracking
 let _ndbcWind = null;
 let _ndbcWave = null;
+let _pendingWind = null; // deferred wind render if buoy card not ready yet
 
 async function fetchNDBC(buoyId) {
   const res = await fetch(`${WORKER_URL}/proxy/ndbc/${buoyId}`);
@@ -628,6 +629,8 @@ async function loadBuoy() {
       <div class="buoy-source">${srcLink}</div>
     `);
     renderQuality();
+    // Flush deferred wind render if loadWeather finished first
+    if (_pendingWind) renderWind(_pendingWind.speedKts, _pendingWind.gustKts, _pendingWind.dir, _pendingWind.isObserved);
 
     // ── Water Temperature card ─────────────────────────────────────────────
     const gearRec = sstF !== '—' ? wetsuitRec(parseFloat(sstF)) : null;
@@ -1255,6 +1258,8 @@ function renderWindForecast(hourly, currentIdx) {
 }
 
 function renderWind(speedKts, gustKts, dir, isObserved) {
+  _pendingWind = { speedKts, gustKts, dir, isObserved };
+
   const [cls, desc] = windClass(speedKts);
   const dirStr = degToCompass(dir);
 
@@ -1270,7 +1275,7 @@ function renderWind(speedKts, gustKts, dir, isObserved) {
   const sourceTag = isObserved ? 'Observed' : 'Model';
 
   const slot = document.getElementById('buoy-wind');
-  if (!slot) return;
+  if (!slot) return; // buoy card not ready yet; stored in _pendingWind
 
   slot.innerHTML = `
     <div style="display:flex;align-items:center;gap:10px">
