@@ -606,6 +606,8 @@ async function loadBuoy() {
           <div class="sub">${mwd !== null ? mwd + '°' : ''}</div>
         </div>
       </div>
+      <div class="divider" style="margin:8px 0"></div>
+      <div id="buoy-wind" style="color:var(--text-muted);font-size:10px;font-family:monospace">Wind loading...</div>
       <div class="buoy-source">${srcLink}</div>
     `);
     renderQuality();
@@ -1129,7 +1131,8 @@ async function loadWeather() {
     QSTATE.windMph = spdKn != null ? spdKn * 1.15078 : null;
     renderQuality();
   } catch (e) {
-    setHTML('wind-body', errorHTML('Wind data unavailable: ' + e.message));
+    const windSlot = document.getElementById('buoy-wind');
+    if (windSlot) windSlot.innerHTML = '<span style="color:#ff5252;font-size:10px">Wind unavailable</span>';
     setHTML('wind-forecast-body', errorHTML('Wind forecast unavailable'));
   }
 }
@@ -1140,9 +1143,9 @@ function renderWindForecast(hourly, currentIdx) {
   const gusts  = hourly.wind_gusts_10m;
   const dirs   = hourly.wind_direction_10m;
 
-  // Collect all forecast hours (7 days to match swell forecast)
+  // Collect next 48 hours of data
   const pts = [];
-  for (let i = currentIdx; i < times.length; i++) {
+  for (let i = currentIdx; i < times.length && pts.length < 48; i++) {
     pts.push({ t: new Date(times[i]), spd: speeds[i] ?? 0, gst: gusts[i] ?? 0, dir: dirs[i] ?? 0 });
   }
   if (pts.length < 2) { setHTML('wind-forecast-body', errorHTML('Not enough forecast data')); return; }
@@ -1176,13 +1179,15 @@ function renderWindForecast(hourly, currentIdx) {
     yLabels += `<line x1="${PL}" y1="${ty(v).toFixed(1)}" x2="${W - PR}" y2="${ty(v).toFixed(1)}" stroke="#1a2e45" stroke-width="0.5"/>`;
   }
 
-  // X-axis: tick at midnight for each day
+  // X-axis: one tick every 6 hours
   let xLabels = '';
   const now = new Date();
   for (const p of pts) {
-    if (p.t.getHours() === 0) {
+    if (p.t.getHours() % 6 === 0) {
       const x = tx(p.t).toFixed(1);
-      const label = p.t.toLocaleDateString([], { weekday: 'short' });
+      const label = p.t.getHours() === 0
+        ? p.t.toLocaleDateString([], { weekday: 'short' })
+        : p.t.getHours() + 'h';
       xLabels += `<line x1="${x}" y1="${PT}" x2="${x}" y2="${PT + cH}" stroke="#1a2e45" stroke-width="0.5"/>`;
       xLabels += `<text x="${x}" y="${H - 3}" text-anchor="middle" fill="#607d8b" font-size="8" font-family="monospace">${label}</text>`;
     }
@@ -1236,57 +1241,34 @@ function renderWind(speedKts, gustKts, dir, isObserved) {
   const [cls, desc] = windClass(speedKts);
   const dirStr = degToCompass(dir);
 
-  const badgeColors = {
-    'wind-calm':   ['#00c853', 'rgba(0,200,83,0.15)'],
-    'wind-light':  ['#69f0ae', 'rgba(105,240,174,0.15)'],
-    'wind-mod':    ['#ffeb3b', 'rgba(255,235,59,0.15)'],
-    'wind-fresh':  ['#ff9800', 'rgba(255,152,0,0.15)'],
-    'wind-strong': ['#f44336', 'rgba(244,67,54,0.15)'],
-    'wind-gale':   ['#b71c1c', 'rgba(183,28,28,0.15)'],
+  const windColors = {
+    'wind-calm':   '#00c853',
+    'wind-light':  '#69f0ae',
+    'wind-mod':    '#ffeb3b',
+    'wind-fresh':  '#ff9800',
+    'wind-strong': '#f44336',
+    'wind-gale':   '#b71c1c',
   };
-  const [bc, bb] = badgeColors[cls];
-  setBadge('wind-badge', desc.toUpperCase(), bc, bb);
+  const wc = windColors[cls];
+  const sourceTag = isObserved ? 'Observed' : 'Model';
 
-  const srcLink = isObserved
-    ? `<a href="https://www.ndbc.noaa.gov/station_page.php?station=${ACTIVE.buoyId}" target="_blank" rel="noopener" class="src-link">NDBC Buoy ${ACTIVE.buoyId} · Observed ↗</a>`
-    : ACTIVE?.isUS
-      ? `<a href="https://forecast.weather.gov/MapClick.php?lat=${LAT()}&lon=${LNG()}" target="_blank" rel="noopener" class="src-link">NWS Point Forecast ↗</a>`
-      : `<a href="https://open-meteo.com/en/docs" target="_blank" rel="noopener" class="src-link">Open-Meteo Weather ↗</a>`;
+  const slot = document.getElementById('buoy-wind');
+  if (!slot) return;
 
-  const sourceTag = isObserved ? 'Observed (NDBC buoy)' : 'Model estimate';
-
-  setHTML('wind-body', `
-    <div class="wind-dir-display">
-      <div class="wind-arrow-circle">
-        <span class="wind-arrow" style="transform:rotate(${dir + 180}deg)">↑</span>
-      </div>
-      <div class="wind-info">
-        <div class="speed-row">
-          <span class="speed ${cls}">${speedKts?.toFixed(0) ?? '—'}</span>
-          <span class="unit">kts</span>
-        </div>
-        <div class="desc">from ${dirStr} (${dir}°) · Gusts ${gustKts?.toFixed(0) ?? '—'} kts</div>
-        <div class="desc" style="color:var(--text-muted)">${sourceTag}</div>
+  slot.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="display:inline-block;transform:rotate(${dir + 180}deg);font-size:18px;line-height:1;color:${wc}">↑</span>
+      <div>
+        <span style="font-size:16px;font-weight:700;color:${wc};font-family:monospace">${speedKts?.toFixed(0) ?? '—'}</span>
+        <span style="font-size:11px;color:var(--text-muted)">kts</span>
+        <span style="font-size:12px;color:var(--text-secondary);margin-left:6px">${desc}</span>
       </div>
     </div>
-    <div class="stats-grid-3">
-      <div class="stat-cell">
-        <div class="label">Speed</div>
-        <div class="value small ${cls}">${speedKts?.toFixed(0) ?? '—'} kts</div>
-        <div class="sub">${(speedKts * 1.15078)?.toFixed(0)} mph</div>
-      </div>
-      <div class="stat-cell">
-        <div class="label">Gusts</div>
-        <div class="value small">${gustKts?.toFixed(0) ?? '—'} kts</div>
-      </div>
-      <div class="stat-cell">
-        <div class="label">From</div>
-        <div class="value small">${dirStr}</div>
-        <div class="sub">${dir}°</div>
-      </div>
-    </div>
-    <div class="buoy-source" style="margin-top:6px">${srcLink}</div>
-  `);
+    <div style="display:flex;gap:16px;margin-top:4px;font-size:11px;font-family:monospace;color:var(--text-secondary)">
+      <span>from ${dirStr} (${dir}°)</span>
+      <span>gusts ${gustKts?.toFixed(0) ?? '—'} kts</span>
+      <span style="color:var(--text-muted)">${sourceTag}</span>
+    </div>`;
 }
 
 // ─── 4. NOAA Tides ────────────────────────────────────────────────────────────
@@ -2467,7 +2449,6 @@ async function refreshAll() {
   setHTML('buoy-body',          loadingHTML());
   setHTML('buoy-map-body',      loadingHTML());
   setHTML('swell-body',         loadingHTML());
-  setHTML('wind-body',          loadingHTML());
   setHTML('wind-forecast-body', loadingHTML());
   setHTML('sun-moon-body',      loadingHTML());
   setHTML('uv-body',            loadingHTML());
