@@ -492,7 +492,6 @@ function wetsuitRec(tempF) {
 // Stores latest NDBC observations for accuracy tracking
 let _ndbcWind = null;
 let _ndbcWave = null;
-let _pendingWind = null; // deferred wind render if buoy card not ready yet
 
 async function fetchNDBC(buoyId) {
   const res = await fetch(`${WORKER_URL}/proxy/ndbc/${buoyId}`);
@@ -599,38 +598,21 @@ async function loadBuoy() {
         </div>`
       : '';
 
+    const perLabel = perTag ? `<div style="font-size:9px;color:${perColor};font-family:monospace;margin-top:2px">${perTag.label}</div>` : '';
+
     setHTML('buoy-body', `
-      <div id="buoy-quality" style="margin-bottom:8px"></div>
-      ${perBadge}
+      <div id="buoy-quality" style="margin-bottom:6px"></div>
       <div class="stat-row">
         <span class="stat-value" style="color:#00d4aa">${wvhtFt}</span>
         ${wvhtFt !== '—' ? '<span class="stat-unit">ft</span>' : ''}
       </div>
       <div class="stat-label">${sourceTag}</div>
-      <div class="stats-grid-3">
-        <div class="stat-cell">
-          <div class="label">Period</div>
-          <div class="value" style="color:${perColor}">${dpd}<span style="font-size:12px;color:var(--text-muted)">s</span></div>
-          <div class="sub" style="color:${perColor}">${perTag ? perTag.label.split(' ')[0] : ''}</div>
-        </div>
-        <div class="stat-cell">
-          <div class="label">Swell</div>
-          <div class="value">${swHt}<span style="font-size:12px;color:var(--text-muted)">ft</span></div>
-          <div class="sub">${swPer}s · ${swDir !== null ? degToCompass(swDir) : '—'}</div>
-        </div>
-        <div class="stat-cell">
-          <div class="label">Direction</div>
-          <div class="value small">${dirStr}</div>
-          <div class="sub">${mwd !== null ? mwd + '°' : ''}</div>
-        </div>
+      <div style="margin-top:6px;font-size:11px;font-family:monospace;color:var(--text-secondary)">
+        <div><span style="color:${perColor};font-weight:600">${dpd}s</span> period${perLabel}</div>
+        <div style="margin-top:3px">${dirStr} <span style="color:var(--text-muted)">${mwd !== null ? mwd + '°' : ''}</span></div>
       </div>
-      <div class="divider" style="margin:8px 0"></div>
-      <div id="buoy-wind" style="color:var(--text-muted);font-size:10px;font-family:monospace">Wind loading...</div>
-      <div class="buoy-source">${srcLink}</div>
     `);
     renderQuality();
-    // Flush deferred wind render if loadWeather finished first
-    if (_pendingWind) renderWind(_pendingWind.speedKts, _pendingWind.gustKts, _pendingWind.dir, _pendingWind.isObserved);
 
     // ── Water Temperature card ─────────────────────────────────────────────
     const gearRec = sstF !== '—' ? wetsuitRec(parseFloat(sstF)) : null;
@@ -1151,8 +1133,7 @@ async function loadWeather() {
     QSTATE.windMph = spdKn != null ? spdKn * 1.15078 : null;
     renderQuality();
   } catch (e) {
-    const windSlot = document.getElementById('buoy-wind');
-    if (windSlot) windSlot.innerHTML = '<span style="color:#ff5252;font-size:10px">Wind unavailable</span>';
+    setHTML('wind-body', '<span style="color:#ff5252;font-size:10px">Wind unavailable</span>');
     setHTML('wind-forecast-body', errorHTML('Wind forecast unavailable'));
   }
 }
@@ -1258,8 +1239,6 @@ function renderWindForecast(hourly, currentIdx) {
 }
 
 function renderWind(speedKts, gustKts, dir, isObserved) {
-  _pendingWind = { speedKts, gustKts, dir, isObserved };
-
   const [cls, desc] = windClass(speedKts);
   const dirStr = degToCompass(dir);
 
@@ -1274,23 +1253,20 @@ function renderWind(speedKts, gustKts, dir, isObserved) {
   const wc = windColors[cls];
   const sourceTag = isObserved ? 'Observed' : 'Model';
 
-  const slot = document.getElementById('buoy-wind');
-  if (!slot) return; // buoy card not ready yet; stored in _pendingWind
+  // Update wind badge
+  setBadge('wind-badge', desc.toUpperCase(), wc, wc + '26');
 
-  slot.innerHTML = `
-    <div style="display:flex;align-items:center;gap:10px">
-      <span style="display:inline-block;transform:rotate(${dir + 180}deg);font-size:18px;line-height:1;color:${wc}">↑</span>
-      <div>
-        <span style="font-size:16px;font-weight:700;color:${wc};font-family:monospace">${speedKts?.toFixed(0) ?? '—'}</span>
-        <span style="font-size:11px;color:var(--text-muted)">kts</span>
-        <span style="font-size:12px;color:var(--text-secondary);margin-left:6px">${desc}</span>
-      </div>
+  setHTML('wind-body', `
+    <div class="stat-row">
+      <span class="stat-value" style="color:${wc}">${speedKts?.toFixed(0) ?? '—'}</span>
+      <span class="stat-unit">kts</span>
     </div>
-    <div style="display:flex;gap:16px;margin-top:4px;font-size:11px;font-family:monospace;color:var(--text-secondary)">
-      <span>from ${dirStr} (${dir}°)</span>
-      <span>gusts ${gustKts?.toFixed(0) ?? '—'} kts</span>
-      <span style="color:var(--text-muted)">${sourceTag}</span>
-    </div>`;
+    <div class="stat-label">${desc} · ${sourceTag}</div>
+    <div style="margin-top:6px;font-size:11px;font-family:monospace;color:var(--text-secondary)">
+      <div>from ${dirStr} <span style="color:var(--text-muted)">${dir}°</span></div>
+      <div style="margin-top:3px">gusts ${gustKts?.toFixed(0) ?? '—'} kts</div>
+    </div>
+  `);
 }
 
 // ─── 4. NOAA Tides ────────────────────────────────────────────────────────────
@@ -2464,6 +2440,7 @@ async function refreshAll() {
   setHTML('7day-body',          loadingHTML());
   setHTML('24h-body',           loadingHTML());
   setHTML('buoy-body',          loadingHTML());
+  setHTML('wind-body',          loadingHTML());
   setHTML('buoy-map-body',      loadingHTML());
   setHTML('swell-body',         loadingHTML());
   setHTML('wind-forecast-body', loadingHTML());
