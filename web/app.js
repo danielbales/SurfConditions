@@ -2494,20 +2494,190 @@ function renderBuoyMap(buoys) {
     ${buoyMarkers}
   </svg>`;
 
-  setHTML('buoy-map-body', svg
-    + `<div style="display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:6px;font-size:8px;color:var(--text-muted);font-family:monospace">`
+  const legend = `<div style="display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:6px;font-size:8px;color:var(--text-muted);font-family:monospace">`
     + `<span><span style="display:inline-block;width:10px;height:0;border-top:2px solid #1e90ff;vertical-align:middle;margin-right:3px"></span>Swell</span>`
     + `<span><span style="display:inline-block;width:10px;height:0;border-top:1px dashed #00c853;vertical-align:middle;margin-right:3px"></span>Wind</span>`
     + `<span><span style="display:inline-block;width:6px;height:6px;border-radius:3px;background:#00d4aa;vertical-align:middle;margin-right:3px"></span>Wave data</span>`
     + `<span><span style="display:inline-block;width:6px;height:6px;border-radius:3px;background:#ffb300;vertical-align:middle;margin-right:3px"></span>Wind only</span>`
     + `<span><span style="display:inline-block;width:6px;height:6px;border-radius:50%;border:1.5px solid #ff6b6b;vertical-align:middle;margin-right:3px"></span>Your spot</span>`
-    + `</div>`
+    + `</div>`;
+
+  setHTML('buoy-map-body',
+    `<div class="buoy-map-wrap">${svg}<canvas id="buoy-wind-canvas"></canvas></div>`
+    + legend
     + `<div class="buoy-source"><a href="https://www.ndbc.noaa.gov/" target="_blank" rel="noopener" class="src-link">NDBC Buoy Network ↗</a></div>`);
+
+  startBuoyWindAnimation(buoys, W, H, PAD, LAT_MIN, LAT_MAX, LON_MIN, LON_MAX);
+}
+
+// ─── Wind Particle Animation (Windy-style) on Buoy Map ───────────────────────
+let _mapWindAnim = null;
+
+function startBuoyWindAnimation(buoys, svgW, svgH, pad, latMin, latMax, lonMin, lonMax) {
+  if (_mapWindAnim) { cancelAnimationFrame(_mapWindAnim.raf); _mapWindAnim = null; }
+
+  const canvas = document.getElementById('buoy-wind-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  // Match canvas to the rendered SVG size
+  const svgEl = canvas.previousElementSibling;
+  const rect = svgEl.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const cw = rect.width;
+  const ch = rect.height;
+  canvas.width = cw * dpr;
+  canvas.height = ch * dpr;
+  canvas.style.width = cw + 'px';
+  canvas.style.height = ch + 'px';
+  ctx.scale(dpr, dpr);
+
+  // Coordinate mappers (SVG viewBox -> canvas pixels)
+  const scaleX = cw / svgW;
+  const scaleY = ch / svgH;
+  const pxFromLon = (lon) => (pad + ((lon - lonMin) / (lonMax - lonMin)) * (svgW - pad * 2)) * scaleX;
+  const pyFromLat = (lat) => (pad + ((latMax - lat) / (latMax - latMin)) * (svgH - pad * 2)) * scaleY;
+
+  // Build ocean clip path from coastline (ocean = left of coast)
+  const coastPts = COASTLINE.map(p => [pxFromLon(p[1]), pyFromLat(p[0])]);
+
+  // Build wind sources from buoys with wind data
+  const windSources = buoys
+    .filter(b => !b.offline && b.wspd != null && b.wspd > 0.5 && b.wdir != null)
+    .map(b => ({
+      x: pxFromLon(b.lon),
+      y: pyFromLat(b.lat),
+      dir: b.wdir,
+      speed: b.wspd,
+      gust: b.gust || b.wspd,
+    }));
+
+  if (windSources.length === 0) return;
+
+  // Interpolate wind at a point using inverse-distance weighting
+  function windAt(x, y) {
+    let wSin = 0, wCos = 0, wSpd = 0, wGust = 0, wTotal = 0;
+    for (const s of windSources) {
+      const dx = x - s.x, dy = y - s.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) + 1;
+      const w = 1 / (dist * dist);
+      const rad = s.dir * Math.PI / 180;
+      wSin += Math.sin(rad) * w;
+      wCos += Math.cos(rad) * w;
+      wSpd += s.speed * w;
+      wGust += s.gust * w;
+      wTotal += w;
+    }
+    return {
+      dir: (Math.atan2(wSin / wTotal, wCos / wTotal) * 180 / Math.PI + 360) % 360,
+      speed: wSpd / wTotal,
+      gust: wGust / wTotal,
+    };
+  }
+
+  // Check if a point is on the ocean side (left of coastline)
+  function isOcean(x, y) {
+    // Find the coastline segment at this y level and check if x is to its left
+    for (let i = 0; i < coastPts.length - 1; i++) {
+      const [x1, y1] = coastPts[i];
+      const [x2, y2] = coastPts[i + 1];
+      if ((y1 <= y && y2 >= y) || (y2 <= y && y1 >= y)) {
+        const t = (y - y1) / (y2 - y1 || 1);
+        const cx = x1 + t * (x2 - x1);
+        if (x < cx) return true;
+      }
+    }
+    return false;
+  }
+
+  // Particle system - subtle, slow-drifting streaks
+  const avgSpeed = windSources.reduce((s, b) => s + b.speed, 0) / windSources.length;
+  const count = Math.min(Math.floor(20 + avgSpeed * 2), 80);
+  const particles = [];
+
+  function spawnParticle(randomAge) {
+    let x, y, attempts = 0;
+    do {
+      x = Math.random() * cw;
+      y = Math.random() * ch;
+      attempts++;
+    } while (!isOcean(x, y) && attempts < 20);
+    if (attempts >= 20) { x = Math.random() * cw * 0.4; y = Math.random() * ch; }
+
+    const w = windAt(x, y);
+    // Wind dir is "from" direction, particles move opposite
+    const rad = ((w.dir + 180) % 360) * Math.PI / 180;
+    const spd = w.speed * 0.6 + Math.random() * (w.gust - w.speed) * 0.4;
+    const pxPerFrame = 0.06 + spd * 0.025;
+    const maxAge = 120 + Math.random() * 160;
+
+    return {
+      x, y,
+      vx: Math.sin(rad) * pxPerFrame,
+      vy: -Math.cos(rad) * pxPerFrame,
+      age: randomAge ? Math.random() * maxAge : 0,
+      maxAge,
+      len: 3 + spd * 0.3,
+      speed: spd,
+    };
+  }
+
+  for (let i = 0; i < count; i++) particles.push(spawnParticle(true));
+
+  function windColor(spd) {
+    if (spd < 5)  return [0, 200, 83];
+    if (spd < 11) return [105, 240, 174];
+    if (spd < 17) return [255, 235, 59];
+    if (spd < 22) return [255, 152, 0];
+    if (spd < 34) return [244, 67, 54];
+    return [183, 28, 28];
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, cw, ch);
+
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.age++;
+
+      const life = p.age / p.maxAge;
+      let alpha;
+      if (life < 0.2) alpha = life / 0.2;
+      else if (life > 0.7) alpha = 1 - (life - 0.7) / 0.3;
+      else alpha = 1;
+      alpha *= 0.3;
+
+      if (p.age >= p.maxAge || p.x < -10 || p.x > cw + 10 || p.y < -10 || p.y > ch + 10 || !isOcean(p.x, p.y)) {
+        particles[i] = spawnParticle(false);
+        continue;
+      }
+
+      const mag = Math.sqrt(p.vx * p.vx + p.vy * p.vy) || 1;
+      const tailX = p.x - p.vx * (p.len / mag);
+      const tailY = p.y - p.vy * (p.len / mag);
+
+      const [r, g, b] = windColor(p.speed);
+      ctx.beginPath();
+      ctx.moveTo(tailX, tailY);
+      ctx.lineTo(p.x, p.y);
+      ctx.strokeStyle = `rgba(${r},${g},${b},${alpha.toFixed(2)})`;
+      ctx.lineWidth = 1;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    }
+
+    _mapWindAnim.raf = requestAnimationFrame(draw);
+  }
+
+  _mapWindAnim = { raf: requestAnimationFrame(draw) };
 }
 
 // ─── Refresh all ──────────────────────────────────────────────────────────────
 async function refreshAll() {
   if (!ACTIVE) return;
+  if (_mapWindAnim) { cancelAnimationFrame(_mapWindAnim.raf); _mapWindAnim = null; }
 
   const btn = document.getElementById('refreshBtn');
   btn.classList.add('spinning');

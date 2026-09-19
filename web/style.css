@@ -579,6 +579,17 @@ main {
 
 .rip-desc { font-size: 11px; color: var(--text-secondary); line-height: 1.4; }
 
+/* Buoy map wind animation */
+.buoy-map-wrap {
+  position: relative;
+}
+.buoy-map-wrap svg { display: block; width: 100%; height: auto; }
+#buoy-wind-canvas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
 /* NOAA buoy */
 .buoy-source {
   font-size: 10px;
