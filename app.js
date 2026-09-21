@@ -1483,9 +1483,7 @@ async function loadTides() {
 
     const tideSource = observedLevel !== null ? 'Observed' : 'Predicted';
     setHTML('tides-body', `
-      <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">24-Hour Tide Schedule</div>
-      <div class="tide-schedule">${scheduleHTML || '<div class="error-msg">No upcoming events</div>'}</div>
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin:10px 0 4px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
         <span style="font-size:18px;font-weight:700;color:#1e90ff">${nowV.toFixed(2)}<span style="font-size:11px;color:var(--text-muted)"> ft ${tideSource.toLowerCase()}</span></span>
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:11px;color:var(--text-secondary)">${trend}</span>
@@ -1496,42 +1494,12 @@ async function loadTides() {
       <div class="buoy-source" style="margin-top:6px"><a href="https://tidesandcurrents.noaa.gov/waterlevels.html?id=${NOAA_STATION()}" target="_blank" rel="noopener" class="src-link">NOAA Tides & Currents · ${tideSource} ↗</a></div>
     `);
 
-    // ── Mini tide widget inside wind card ────────────────────────────────────
+    // ── 24-hour tide schedule inside wind card ─────────────────────────────
     const miniEl = document.getElementById('tide-mini');
     if (miniEl) {
-      const nextEvent = events.find(e => e.t > now);
-      const nextLabel = nextEvent
-        ? `${nextEvent.type === 'H' ? 'High' : 'Low'} ${nextEvent.v.toFixed(1)}ft @ ${fmtTime(nextEvent.t)}`
-        : '';
-
-      // Mini sparkline: 3h back to 6h ahead
-      const mStart = new Date(now.getTime() - 3 * 3600000);
-      const mEnd   = new Date(now.getTime() + 6 * 3600000);
-      const mPts   = hourly.filter(p => p.t >= mStart && p.t <= mEnd);
-      let miniSvg = '';
-      if (mPts.length >= 2) {
-        const mW = 100, mH = 24;
-        const mVals = mPts.map(p => p.v);
-        const mMin = Math.min(...mVals) - 0.2;
-        const mMax = Math.max(...mVals) + 0.2;
-        const mRange = mEnd - mStart;
-        const mx = t => ((t - mStart) / mRange) * mW;
-        const my = v => mH - ((v - mMin) / (mMax - mMin)) * mH;
-        const line = mPts.map((p, i) => `${i === 0 ? 'M' : 'L'}${mx(p.t).toFixed(1)},${my(p.v).toFixed(1)}`).join(' ');
-        const nxPx = mx(now).toFixed(1);
-        const nyPx = my(nowV).toFixed(1);
-        miniSvg = `<svg viewBox="0 0 ${mW} ${mH}" style="width:100%;height:${mH}px;display:block;margin-top:4px">
-          <path d="${line}" fill="none" stroke="#1e90ff" stroke-width="1.5" stroke-linejoin="round" opacity="0.5"/>
-          <circle cx="${nxPx}" cy="${nyPx}" r="2.5" fill="#00d4aa"/>
-        </svg>`;
-      }
-
       miniEl.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:baseline">
-          <span style="font-size:11px;color:#1e90ff;font-weight:600">🌊 ${nowV.toFixed(1)}ft <span style="color:var(--text-muted);font-weight:400">${trend}</span></span>
-        </div>
-        <div style="font-size:9px;color:var(--text-muted);margin-top:2px">${nextLabel}</div>
-        ${miniSvg}`;
+        <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">24h Tides - ${nowV.toFixed(1)}ft ${trend}</div>
+        <div class="tide-schedule">${scheduleHTML || '<div class="error-msg">No upcoming events</div>'}</div>`;
     }
   } catch (e) {
     setHTML('tides-body', errorHTML('Tide data unavailable: ' + e.message));
@@ -2546,7 +2514,7 @@ function renderBuoyMap(buoys) {
     latLabels += `<line x1="${PAD}" y1="${py(lat).toFixed(1)}" x2="${W - PAD}" y2="${py(lat).toFixed(1)}" stroke="#1a2e45" stroke-width="0.3" stroke-dasharray="1,2"/>`;
   }
 
-  const svg = `<svg id="buoy-map-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:100%;cursor:grab;touch-action:none">
+  const svg = `<svg id="buoy-map-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="display:block;width:100%;height:100%;cursor:grab;touch-action:none">
     <defs>
       <marker id="arrowSwell" markerWidth="4" markerHeight="3" refX="4" refY="1.5" orient="auto">
         <polygon points="0 0, 4 1.5, 0 3" fill="#1e90ff"/>
@@ -2629,6 +2597,7 @@ function setupMapPan(svgEl, mapW, mapH) {
 
   svgEl.addEventListener('pointermove', e => {
     if (!dragging) return;
+    e.preventDefault();
     const rect = svgEl.getBoundingClientRect();
     const dx = (e.clientX - startX) * (vbW / rect.width);
     const dy = (e.clientY - startY) * (vbH / rect.height);

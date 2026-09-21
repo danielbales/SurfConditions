@@ -579,11 +579,11 @@ main {
 
 .rip-desc { font-size: 11px; color: var(--text-secondary); line-height: 1.4; }
 
-/* Mini tide widget (inside wind card) */
+/* 24h tide schedule (inside wind card, above wind data) */
 #tide-mini:empty { display: none; }
 #tide-mini {
-  padding: 6px 10px 8px;
-  border-top: 1px solid var(--border);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
   font-family: monospace;
 }
 
