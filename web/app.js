@@ -2506,64 +2506,64 @@ function renderBuoyMap(buoys) {
     const isActive = b.id === ACTIVE?.buoyId;
 
     const dotColor = b.offline ? '#555' : b.wvHt != null ? '#00d4aa' : '#ffb300';
-    const dotR = isActive ? 5 : 3.5;
-    buoyMarkers += `<circle cx="${bx}" cy="${by}" r="${dotR}" fill="${dotColor}" stroke="${isActive ? '#fff' : 'none'}" stroke-width="${isActive ? 1.5 : 0}"/>`;
+    const dotR = isActive ? 2.5 : 1.8;
+    buoyMarkers += `<circle cx="${bx}" cy="${by}" r="${dotR}" fill="${dotColor}" stroke="${isActive ? '#fff' : 'none'}" stroke-width="${isActive ? 0.8 : 0}"/>`;
 
     if (!b.offline) {
       const lines = [];
       if (b.wvHt != null) lines.push(`${b.wvHt.toFixed(1)}ft ${b.dpd ?? ''}s ${b.mwd != null ? degToCompass(b.mwd) : ''}`);
       if (b.wspd != null) lines.push(`wind ${b.wspd.toFixed(0)}kts ${b.wdir != null ? degToCompass(b.wdir) : ''}`);
 
-      const labelX = parseFloat(bx) < W / 2 ? parseFloat(bx) - 6 : parseFloat(bx) + 6;
+      const labelX = parseFloat(bx) < W / 2 ? parseFloat(bx) - 3 : parseFloat(bx) + 3;
       const anchor = parseFloat(bx) < W / 2 ? 'end' : 'start';
 
-      buoyMarkers += `<text x="${labelX}" y="${parseFloat(by) - 10}" text-anchor="${anchor}" fill="#8fa4b8" font-size="7" font-family="monospace">${b.name}</text>`;
+      buoyMarkers += `<text x="${labelX}" y="${parseFloat(by) - 5}" text-anchor="${anchor}" fill="#8fa4b8" font-size="3.5" font-family="monospace">${b.name}</text>`;
       lines.forEach((line, li) => {
-        buoyMarkers += `<text x="${labelX}" y="${parseFloat(by) + 2 + li * 10}" text-anchor="${anchor}" fill="#ccd6e0" font-size="8" font-family="monospace" font-weight="600">${line}</text>`;
+        buoyMarkers += `<text x="${labelX}" y="${parseFloat(by) + 1 + li * 5}" text-anchor="${anchor}" fill="#ccd6e0" font-size="3.5" font-family="monospace" font-weight="600">${line}</text>`;
       });
 
       if (b.mwd != null && b.wvHt != null) {
-        const len = 14;
+        const len = 7;
         const rad = ((b.mwd + 180) * Math.PI) / 180;
         const ax = parseFloat(bx) + Math.sin(rad) * len;
         const ay = parseFloat(by) - Math.cos(rad) * len;
-        buoyMarkers += `<line x1="${bx}" y1="${by}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="#1e90ff" stroke-width="2" marker-end="url(#arrowSwell)"/>`;
+        buoyMarkers += `<line x1="${bx}" y1="${by}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="#1e90ff" stroke-width="1" marker-end="url(#arrowSwell)"/>`;
       }
       if (b.wdir != null && b.wspd != null && b.wspd > 1) {
-        const len = 14;
+        const len = 7;
         const rad = ((b.wdir + 180) * Math.PI) / 180;
         const ax = parseFloat(bx) + Math.sin(rad) * len;
         const ay = parseFloat(by) - Math.cos(rad) * len;
         const wc = b.wspd < 10 ? '#00c853' : b.wspd < 20 ? '#ffeb3b' : '#f44336';
-        buoyMarkers += `<line x1="${bx}" y1="${by}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="${wc}" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrowWind)"/>`;
+        buoyMarkers += `<line x1="${bx}" y1="${by}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="${wc}" stroke-width="0.8" stroke-dasharray="2,1.5" marker-end="url(#arrowWind)"/>`;
       }
     } else {
-      buoyMarkers += `<text x="${parseFloat(bx) + 6}" y="${parseFloat(by) + 3}" fill="#555" font-size="7" font-family="monospace">${b.name}</text>`;
+      buoyMarkers += `<text x="${parseFloat(bx) + 3}" y="${parseFloat(by) + 1.5}" fill="#555" font-size="3.5" font-family="monospace">${b.name}</text>`;
     }
   }
 
   // Latitude labels every 2 degrees
   let latLabels = '';
   for (let lat = 33; lat <= 48; lat += 2) {
-    latLabels += `<text x="3" y="${py(lat).toFixed(1)}" fill="#3a5068" font-size="7" font-family="monospace" dominant-baseline="middle">${lat}°N</text>`;
-    latLabels += `<line x1="${PAD}" y1="${py(lat).toFixed(1)}" x2="${W - PAD}" y2="${py(lat).toFixed(1)}" stroke="#1a2e45" stroke-width="0.5" stroke-dasharray="2,4"/>`;
+    latLabels += `<text x="3" y="${py(lat).toFixed(1)}" fill="#3a5068" font-size="3.5" font-family="monospace" dominant-baseline="middle">${lat}°N</text>`;
+    latLabels += `<line x1="${PAD}" y1="${py(lat).toFixed(1)}" x2="${W - PAD}" y2="${py(lat).toFixed(1)}" stroke="#1a2e45" stroke-width="0.3" stroke-dasharray="1,2"/>`;
   }
 
   const svg = `<svg id="buoy-map-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:100%;cursor:grab;touch-action:none">
     <defs>
-      <marker id="arrowSwell" markerWidth="5" markerHeight="4" refX="5" refY="2" orient="auto">
-        <polygon points="0 0, 5 2, 0 4" fill="#1e90ff"/>
+      <marker id="arrowSwell" markerWidth="4" markerHeight="3" refX="4" refY="1.5" orient="auto">
+        <polygon points="0 0, 4 1.5, 0 3" fill="#1e90ff"/>
       </marker>
-      <marker id="arrowWind" markerWidth="5" markerHeight="4" refX="5" refY="2" orient="auto" markerUnits="strokeWidth">
-        <polygon points="0 0, 5 2, 0 4" fill="#00c853" class="wind-arrow-fill"/>
+      <marker id="arrowWind" markerWidth="4" markerHeight="3" refX="4" refY="1.5" orient="auto" markerUnits="strokeWidth">
+        <polygon points="0 0, 4 1.5, 0 3" fill="#00c853" class="wind-arrow-fill"/>
       </marker>
     </defs>
     <rect x="-20" y="-20" width="${W + 40}" height="${H + 40}" fill="#0d1f35"/>
     ${latLabels}
     <path d="${landPath}" fill="#152238" stroke="none"/>
-    <path d="${coastPath}" fill="none" stroke="#2a4a6b" stroke-width="1.5" stroke-linejoin="round"/>
-    <circle cx="${spotX}" cy="${spotY}" r="4" fill="none" stroke="#ff6b6b" stroke-width="1.5"/>
-    <circle cx="${spotX}" cy="${spotY}" r="1.5" fill="#ff6b6b"/>
+    <path d="${coastPath}" fill="none" stroke="#2a4a6b" stroke-width="0.8" stroke-linejoin="round"/>
+    <circle cx="${spotX}" cy="${spotY}" r="2" fill="none" stroke="#ff6b6b" stroke-width="0.8"/>
+    <circle cx="${spotX}" cy="${spotY}" r="0.8" fill="#ff6b6b"/>
     ${buoyMarkers}
   </svg>`;
 
@@ -2602,14 +2602,26 @@ function renderBuoyMap(buoys) {
   startBuoyWindAnimation();
 }
 
-// ─── Map Pan Interaction ─────────────────────────────────────────────────────
+// ─── Map Pan + Pinch-Zoom Interaction ────────────────────────────────────────
 function setupMapPan(svgEl, mapW, mapH) {
   let dragging = false;
   let startX, startY, startVBX, startVBY, vbW, vbH;
+  let lastPinchDist = null;
+  const MIN_VBW = 60; // max zoom in (~1.5° span)
+  const MAX_VBW = mapW; // full map
 
+  function getVB() { return svgEl.getAttribute('viewBox').split(' ').map(Number); }
+
+  function clampVB(x, y, w, h) {
+    x = Math.max(0, Math.min(mapW - w, x));
+    y = Math.max(0, Math.min(mapH - h, y));
+    svgEl.setAttribute('viewBox', `${x.toFixed(1)} ${y.toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)}`);
+  }
+
+  // Single-finger pan via pointer events
   svgEl.addEventListener('pointerdown', e => {
     dragging = true;
-    const vb = svgEl.getAttribute('viewBox').split(' ').map(Number);
+    const vb = getVB();
     [startVBX, startVBY, vbW, vbH] = vb;
     startX = e.clientX;
     startY = e.clientY;
@@ -2623,9 +2635,7 @@ function setupMapPan(svgEl, mapW, mapH) {
     const rect = svgEl.getBoundingClientRect();
     const dx = (e.clientX - startX) * (vbW / rect.width);
     const dy = (e.clientY - startY) * (vbH / rect.height);
-    let nx = Math.max(0, Math.min(mapW - vbW, startVBX - dx));
-    let ny = Math.max(0, Math.min(mapH - vbH, startVBY - dy));
-    svgEl.setAttribute('viewBox', `${nx.toFixed(1)} ${ny.toFixed(1)} ${vbW.toFixed(1)} ${vbH.toFixed(1)}`);
+    clampVB(startVBX - dx, startVBY - dy, vbW, vbH);
   });
 
   svgEl.addEventListener('pointerup', () => {
@@ -2639,16 +2649,95 @@ function setupMapPan(svgEl, mapW, mapH) {
     dragging = false;
     svgEl.style.cursor = 'grab';
   });
+
+  // Pinch-to-zoom via touch events
+  svgEl.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      lastPinchDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      dragging = false; // cancel pan when second finger arrives
+      if (_mapWindAnim) { cancelAnimationFrame(_mapWindAnim.raf); _mapWindAnim = null; }
+    }
+  }, { passive: true });
+
+  svgEl.addEventListener('touchmove', e => {
+    if (e.touches.length === 2 && lastPinchDist !== null) {
+      e.preventDefault();
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const scale = lastPinchDist / dist;
+      lastPinchDist = dist;
+
+      const vb = getVB();
+      const ar = vb[2] / vb[3];
+      let newW = Math.max(MIN_VBW, Math.min(MAX_VBW, vb[2] * scale));
+      let newH = newW / ar;
+
+      const cx = vb[0] + vb[2] / 2;
+      const cy = vb[1] + vb[3] / 2;
+      clampVB(cx - newW / 2, cy - newH / 2, newW, newH);
+    }
+  }, { passive: false });
+
+  svgEl.addEventListener('touchend', e => {
+    if (e.touches.length < 2) {
+      if (lastPinchDist !== null) {
+        lastPinchDist = null;
+        startBuoyWindAnimation();
+      }
+    }
+  }, { passive: true });
+
+  // Scroll-wheel zoom (trackpad / mouse)
+  svgEl.addEventListener('wheel', e => {
+    e.preventDefault();
+    if (_mapWindAnim) { cancelAnimationFrame(_mapWindAnim.raf); _mapWindAnim = null; }
+    const vb = getVB();
+    const ar = vb[2] / vb[3];
+    const scale = e.deltaY > 0 ? 1.08 : 0.92;
+    let newW = Math.max(MIN_VBW, Math.min(MAX_VBW, vb[2] * scale));
+    let newH = newW / ar;
+
+    // Zoom toward cursor position
+    const rect = svgEl.getBoundingClientRect();
+    const mx = vb[0] + ((e.clientX - rect.left) / rect.width) * vb[2];
+    const my = vb[1] + ((e.clientY - rect.top) / rect.height) * vb[3];
+    const nx = mx - (mx - vb[0]) * (newW / vb[2]);
+    const ny = my - (my - vb[1]) * (newH / vb[3]);
+    clampVB(nx, ny, newW, newH);
+
+    clearTimeout(svgEl._wheelTimer);
+    svgEl._wheelTimer = setTimeout(() => startBuoyWindAnimation(), 200);
+  }, { passive: false });
 }
 
 // ─── Wind Color Overlay + Particle Animation ─────────────────────────────────
+const WIND_RAMP = [
+  [0,  [10, 50, 120]],
+  [3,  [0, 120, 180]],
+  [6,  [0, 180, 120]],
+  [10, [60, 200, 50]],
+  [15, [180, 210, 40]],
+  [20, [240, 170, 20]],
+  [25, [240, 100, 10]],
+  [30, [220, 50, 20]],
+  [40, [170, 20, 20]],
+];
+
 function windColorRGB(spd) {
-  if (spd < 5)  return [0, 200, 83];
-  if (spd < 11) return [105, 240, 174];
-  if (spd < 17) return [255, 235, 59];
-  if (spd < 22) return [255, 152, 0];
-  if (spd < 34) return [244, 67, 54];
-  return [183, 28, 28];
+  if (spd <= WIND_RAMP[0][0]) return WIND_RAMP[0][1];
+  for (let i = 1; i < WIND_RAMP.length; i++) {
+    if (spd <= WIND_RAMP[i][0]) {
+      const t = (spd - WIND_RAMP[i-1][0]) / (WIND_RAMP[i][0] - WIND_RAMP[i-1][0]);
+      const a = WIND_RAMP[i-1][1], b = WIND_RAMP[i][1];
+      return [Math.round(a[0]+(b[0]-a[0])*t), Math.round(a[1]+(b[1]-a[1])*t), Math.round(a[2]+(b[2]-a[2])*t)];
+    }
+  }
+  return WIND_RAMP[WIND_RAMP.length-1][1];
 }
 
 function startBuoyWindAnimation() {
@@ -2728,20 +2817,22 @@ function startBuoyWindAnimation() {
     return false;
   }
 
-  // Precompute wind color overlay (offscreen canvas at CSS resolution)
+  // Precompute wind color overlay - low-res for smooth gradient when scaled up
+  const oScale = 5;
+  const ow = Math.ceil(cw / oScale);
+  const oh = Math.ceil(ch / oScale);
   const overlayCanvas = document.createElement('canvas');
-  overlayCanvas.width = Math.ceil(cw);
-  overlayCanvas.height = Math.ceil(ch);
+  overlayCanvas.width = ow;
+  overlayCanvas.height = oh;
   const oc = overlayCanvas.getContext('2d');
-  const cellSize = 8;
-  for (let y = 0; y < ch; y += cellSize) {
-    for (let x = 0; x < cw; x += cellSize) {
-      const mx = x + cellSize / 2, my = y + cellSize / 2;
+  for (let y = 0; y < oh; y++) {
+    for (let x = 0; x < ow; x++) {
+      const mx = (x + 0.5) * oScale, my = (y + 0.5) * oScale;
       if (!isOcean(mx, my)) continue;
       const w = windAt(mx, my);
       const [r, g, b] = windColorRGB(w.speed);
-      oc.fillStyle = `rgba(${r},${g},${b},0.13)`;
-      oc.fillRect(x, y, cellSize, cellSize);
+      oc.fillStyle = `rgb(${r},${g},${b})`;
+      oc.fillRect(x, y, 1, 1);
     }
   }
 
@@ -2781,8 +2872,12 @@ function startBuoyWindAnimation() {
   function draw() {
     ctx.clearRect(0, 0, cw, ch);
 
-    // Draw cached wind color overlay
-    ctx.drawImage(overlayCanvas, 0, 0);
+    // Draw cached wind color overlay (low-res scaled up = smooth gradient)
+    ctx.globalAlpha = 0.35;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(overlayCanvas, 0, 0, cw, ch);
+    ctx.globalAlpha = 1;
 
     for (let i = 0; i < particles.length; i++) {
       const p = particles[i];
