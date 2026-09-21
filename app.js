@@ -1458,17 +1458,14 @@ async function loadTides() {
         ${yLabels}
       </svg>`;
 
+    const sched24End = new Date(now.getTime() + 24 * 3600000);
     const scheduleHTML = events
-      .filter(e => {
-        const d = e.t;
-        return d.getFullYear() === today.getFullYear()
-          && d.getMonth() === today.getMonth()
-          && d.getDate() === today.getDate();
-      })
+      .filter(e => e.t >= now && e.t <= sched24End)
       .map(e => {
         const isHigh = e.type === 'H';
+        const isPast = e.t < now;
         return `
-          <div class="tide-event">
+          <div class="tide-event${isPast ? ' past' : ''}">
             <span class="type-badge ${isHigh ? 'high' : 'low'}">${isHigh ? 'High' : 'Low'}</span>
             <span class="time">${fmtTime(e.t)}</span>
             <span class="height">${e.v.toFixed(2)} ft</span>
@@ -1486,7 +1483,9 @@ async function loadTides() {
 
     const tideSource = observedLevel !== null ? 'Observed' : 'Predicted';
     setHTML('tides-body', `
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+      <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">24-Hour Tide Schedule</div>
+      <div class="tide-schedule">${scheduleHTML || '<div class="error-msg">No upcoming events</div>'}</div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin:10px 0 4px">
         <span style="font-size:18px;font-weight:700;color:#1e90ff">${nowV.toFixed(2)}<span style="font-size:11px;color:var(--text-muted)"> ft ${tideSource.toLowerCase()}</span></span>
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:11px;color:var(--text-secondary)">${trend}</span>
@@ -1494,8 +1493,6 @@ async function loadTides() {
         </div>
       </div>
       ${svg}
-      <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin:6px 0 4px">Today's Schedule</div>
-      <div class="tide-schedule">${scheduleHTML || '<div class="error-msg">No events today</div>'}</div>
       <div class="buoy-source" style="margin-top:6px"><a href="https://tidesandcurrents.noaa.gov/waterlevels.html?id=${NOAA_STATION()}" target="_blank" rel="noopener" class="src-link">NOAA Tides & Currents · ${tideSource} ↗</a></div>
     `);
 
