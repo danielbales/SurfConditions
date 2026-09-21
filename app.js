@@ -1494,12 +1494,77 @@ async function loadTides() {
       <div class="buoy-source" style="margin-top:6px"><a href="https://tidesandcurrents.noaa.gov/waterlevels.html?id=${NOAA_STATION()}" target="_blank" rel="noopener" class="src-link">NOAA Tides & Currents · ${tideSource} ↗</a></div>
     `);
 
-    // ── 24-hour tide schedule inside wind card ─────────────────────────────
+    // ── Tide graph inside wind card ────────────────────────────────────────
     const miniEl = document.getElementById('tide-mini');
     if (miniEl) {
-      miniEl.innerHTML = `
-        <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">24h Tides - ${nowV.toFixed(1)}ft ${trend}</div>
-        <div class="tide-schedule">${scheduleHTML || '<div class="error-msg">No upcoming events</div>'}</div>`;
+      // Build a compact 24h tide chart (6h back, 18h ahead)
+      const mW = 280, mH = 70, mPL = 22, mPR = 4, mPT = 10, mPB = 14;
+      const mCW = mW - mPL - mPR, mCH = mH - mPT - mPB;
+      const mStart = new Date(now.getTime() - 6 * 3600000);
+      const mEnd   = new Date(now.getTime() + 18 * 3600000);
+      const mPts   = hourly.filter(p => p.t >= mStart && p.t <= mEnd);
+
+      if (mPts.length >= 2) {
+        const mVals = mPts.map(p => p.v);
+        const mMin = Math.min(...mVals) - 0.3;
+        const mMax = Math.max(...mVals) + 0.3;
+        const mTR = mEnd - mStart;
+        const mtx = t => mPL + ((t - mStart) / mTR) * mCW;
+        const mty = v => mPT + (1 - (v - mMin) / (mMax - mMin)) * mCH;
+
+        const mPtsXY = mPts.map(p => [mtx(p.t), mty(p.v)]);
+        let mPathD = `M ${mPtsXY[0][0].toFixed(1)},${mPtsXY[0][1].toFixed(1)}`;
+        for (let i = 1; i < mPtsXY.length; i++) {
+          const cpx = (mPtsXY[i-1][0] + mPtsXY[i][0]) / 2;
+          mPathD += ` C ${cpx.toFixed(1)},${mPtsXY[i-1][1].toFixed(1)} ${cpx.toFixed(1)},${mPtsXY[i][1].toFixed(1)} ${mPtsXY[i][0].toFixed(1)},${mPtsXY[i][1].toFixed(1)}`;
+        }
+        const mFillD = mPathD
+          + ` L ${mPtsXY[mPtsXY.length-1][0].toFixed(1)},${(mPT + mCH).toFixed(1)}`
+          + ` L ${mPtsXY[0][0].toFixed(1)},${(mPT + mCH).toFixed(1)} Z`;
+
+        const mNowX = mtx(now).toFixed(1);
+        const mNowY = mty(nowV).toFixed(1);
+
+        // Hi/lo markers within the 24h window
+        const mEvents = events.filter(e => e.t >= mStart && e.t <= mEnd);
+        const mMarkers = mEvents.map(e => {
+          const ex = mtx(e.t).toFixed(1);
+          const ey = mty(e.v).toFixed(1);
+          const isHigh = e.type === 'H';
+          const color = isHigh ? '#9b6dff' : '#1e90ff';
+          const ly = isHigh ? (parseFloat(ey) - 5).toFixed(1) : (parseFloat(ey) + 9).toFixed(1);
+          const timeStr = e.t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(' ', '');
+          return `<circle cx="${ex}" cy="${ey}" r="2.5" fill="${color}" stroke="#0f1f3d" stroke-width="1"/>
+            <text x="${ex}" y="${ly}" text-anchor="middle" font-size="6" fill="${color}" font-weight="600">${e.v.toFixed(1)}ft ${timeStr}</text>`;
+        }).join('');
+
+        // Time labels
+        let mXLabels = '';
+        for (let h = 0; h <= 24; h += 6) {
+          const t = new Date(mStart.getTime() + h * 3600000);
+          const x = mtx(t).toFixed(1);
+          const lbl = t.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true }).replace(' ', '');
+          mXLabels += `<text x="${x}" y="${(mH - 3).toFixed(1)}" text-anchor="middle" font-size="6" fill="#4a7a96">${lbl}</text>`;
+        }
+
+        miniEl.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">
+            <span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">24h Tides</span>
+            <span style="font-size:11px;color:#1e90ff;font-weight:600">${nowV.toFixed(1)}ft <span style="font-weight:400;color:var(--text-muted)">${trend}</span></span>
+          </div>
+          <svg viewBox="0 0 ${mW} ${mH}" width="100%" style="display:block;overflow:visible">
+            <defs><linearGradient id="tideFillMini" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#1e90ff" stop-opacity="0.2"/>
+              <stop offset="100%" stop-color="#1e90ff" stop-opacity="0.02"/>
+            </linearGradient></defs>
+            <path d="${mFillD}" fill="url(#tideFillMini)"/>
+            <path d="${mPathD}" fill="none" stroke="#1e90ff" stroke-width="1.5" stroke-linejoin="round"/>
+            <line x1="${mNowX}" y1="${mPT}" x2="${mNowX}" y2="${mPT + mCH}" stroke="#00d4aa" stroke-width="1" stroke-dasharray="2,2"/>
+            <circle cx="${mNowX}" cy="${mNowY}" r="3" fill="#00d4aa" stroke="#0f1f3d" stroke-width="1"/>
+            ${mMarkers}
+            ${mXLabels}
+          </svg>`;
+      }
     }
   } catch (e) {
     setHTML('tides-body', errorHTML('Tide data unavailable: ' + e.message));
