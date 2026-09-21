@@ -2376,19 +2376,46 @@ function render24HourHeatmap() {
 
 // ─── Live Buoy Map ───────────────────────────────────────────────────────────
 const MAP_BUOYS = [
-  { id: '46013', name: 'Bodega Bay',    lat: 38.235, lon: -123.317 },
-  { id: '46214', name: 'Pt Reyes',      lat: 37.944, lon: -123.466 },
-  { id: '46237', name: 'SF Bar',        lat: 37.788, lon: -122.634 },
-  { id: '46026', name: 'San Francisco', lat: 37.75,  lon: -122.838 },
-  { id: '46012', name: 'Half Moon Bay', lat: 37.356, lon: -122.881 },
-  { id: '46042', name: 'Monterey',      lat: 36.787, lon: -122.408 },
-  { id: '46236', name: 'Mty Canyon',    lat: 36.759, lon: -121.95 },
-  { id: '46239', name: 'Pt Sur',        lat: 36.342, lon: -122.11 },
+  // SoCal
+  { id: '46225', name: 'Torrey Pines',    lat: 32.933, lon: -117.391 },
+  { id: '46086', name: 'San Clemente',    lat: 32.491, lon: -118.034 },
+  { id: '46069', name: 'S Santa Rosa Is', lat: 33.674, lon: -120.212 },
+  { id: '46054', name: 'Santa Barbara W', lat: 34.274, lon: -120.453 },
+  { id: '46011', name: 'Santa Maria',     lat: 34.956, lon: -120.997 },
+  // Central CA
   { id: '46028', name: 'Cape San Martin', lat: 35.763, lon: -121.9 },
+  { id: '46239', name: 'Pt Sur',          lat: 36.342, lon: -122.11 },
+  { id: '46042', name: 'Monterey',        lat: 36.787, lon: -122.408 },
+  { id: '46236', name: 'Mty Canyon',      lat: 36.759, lon: -121.95 },
+  { id: '46012', name: 'Half Moon Bay',   lat: 37.356, lon: -122.881 },
+  { id: '46026', name: 'San Francisco',   lat: 37.75,  lon: -122.838 },
+  { id: '46237', name: 'SF Bar',          lat: 37.788, lon: -122.634 },
+  { id: '46214', name: 'Pt Reyes',        lat: 37.944, lon: -123.466 },
+  { id: '46013', name: 'Bodega Bay',      lat: 38.235, lon: -123.317 },
+  // NorCal
+  { id: '46014', name: 'Pt Arena',        lat: 38.956, lon: -123.740 },
+  { id: '46022', name: 'Eel River',       lat: 40.712, lon: -124.572 },
+  { id: '46027', name: 'St Georges',      lat: 41.840, lon: -124.381 },
+  // Oregon
+  { id: '46015', name: 'Port Orford',     lat: 42.764, lon: -124.832 },
+  { id: '46050', name: 'Stonewall Bank',  lat: 44.641, lon: -124.526 },
+  { id: '46029', name: 'Columbia River',  lat: 46.142, lon: -124.514 },
+  // Washington
+  { id: '46041', name: 'Cape Elizabeth',   lat: 47.352, lon: -124.750 },
 ];
 
-// Simplified CA coastline (lat, lon) - south to north
+// Full US West Coast coastline (lat, lon) - south to north
 const COASTLINE = [
+  // SoCal
+  [32.53,-117.12],[32.68,-117.16],[32.85,-117.27],[33.02,-117.30],
+  [33.19,-117.39],[33.35,-117.59],[33.46,-117.71],[33.62,-117.93],
+  [33.72,-118.19],[33.71,-118.41],[33.76,-118.43],[33.86,-118.47],
+  [34.00,-118.53],[34.03,-118.81],[34.03,-119.05],[34.28,-119.27],
+  [34.40,-119.54],[34.44,-119.87],[34.46,-120.47],
+  // Central Coast
+  [34.57,-120.64],[34.66,-120.62],[34.91,-120.87],[35.17,-120.87],
+  [35.28,-120.89],[35.37,-120.86],
+  // Central CA
   [35.46,-120.95],[35.64,-121.14],[35.77,-121.32],[35.89,-121.45],
   [36.06,-121.57],[36.23,-121.80],[36.37,-121.90],[36.55,-121.93],
   [36.60,-121.89],[36.62,-121.80],[36.80,-121.79],[36.87,-121.79],
@@ -2396,11 +2423,29 @@ const COASTLINE = [
   [37.49,-122.45],[37.62,-122.49],[37.79,-122.51],[37.83,-122.48],
   [37.86,-122.50],[37.93,-122.58],[37.96,-122.70],[37.99,-122.97],
   [38.06,-123.00],[38.24,-123.06],[38.36,-123.07],[38.45,-123.10],
+  // NorCal
+  [38.55,-123.14],[38.77,-123.46],[38.95,-123.69],[39.15,-123.74],
+  [39.44,-123.81],[39.73,-123.82],[40.02,-124.08],[40.23,-124.24],
+  [40.44,-124.41],[40.63,-124.30],[40.77,-124.20],[40.93,-124.16],
+  [41.06,-124.15],[41.36,-124.06],[41.56,-124.08],[41.74,-124.20],
+  // Oregon
+  [42.05,-124.28],[42.25,-124.39],[42.41,-124.42],[42.73,-124.48],
+  [43.37,-124.33],[43.68,-124.21],[43.98,-124.11],[44.25,-124.11],
+  [44.63,-124.06],[44.84,-124.03],[44.96,-124.01],[45.23,-123.96],
+  [45.46,-123.95],[45.61,-123.94],[45.77,-123.96],[45.92,-123.97],
+  [46.18,-123.93],
+  // Washington
+  [46.28,-124.04],[46.53,-124.06],[46.75,-124.10],[47.00,-124.17],
+  [47.24,-124.35],[47.53,-124.40],[47.74,-124.53],[47.90,-124.63],
+  [48.15,-124.65],[48.38,-124.73],
 ];
+
+// Shared map state
+let _buoyMapState = null;
+let _mapWindAnim = null;
 
 async function loadBuoyMap() {
   try {
-    // Fetch all buoys in parallel via worker proxy
     const results = await Promise.allSettled(
       MAP_BUOYS.map(b =>
         fetch(`${WORKER_URL}/proxy/ndbc/${b.id}`)
@@ -2412,8 +2457,6 @@ async function loadBuoyMap() {
     const buoyData = MAP_BUOYS.map((b, i) => {
       const r = results[i].status === 'fulfilled' ? results[i].value : null;
       if (!r || !r.ok) return { ...b, offline: true };
-
-      // Scan for wave data (worker already does this, but guard nulls)
       const wv = r.wave || {};
       const wind = r.wind || {};
       return {
@@ -2434,48 +2477,43 @@ async function loadBuoyMap() {
 }
 
 function renderBuoyMap(buoys) {
-  // Map bounds
-  const LAT_MIN = 35.3, LAT_MAX = 38.6;
-  const LON_MIN = -124.0, LON_MAX = -120.5;
-  const W = 340, H = 420, PAD = 10;
+  // Full West Coast coordinate system
+  const FLAT = 32, FLAT2 = 49, FLON = -129, FLON2 = -115.5;
+  const W = 540, H = 680, PAD = 5;
 
-  const px = (lon) => PAD + ((lon - LON_MIN) / (LON_MAX - LON_MIN)) * (W - PAD * 2);
-  const py = (lat) => PAD + ((LAT_MAX - lat) / (LAT_MAX - LAT_MIN)) * (H - PAD * 2);
+  const px = (lon) => PAD + ((lon - FLON) / (FLON2 - FLON)) * (W - PAD * 2);
+  const py = (lat) => PAD + ((FLAT2 - lat) / (FLAT2 - FLAT)) * (H - PAD * 2);
 
-  // Draw coastline
+  // Coastline
   const coastPath = COASTLINE.map((p, i) =>
     `${i === 0 ? 'M' : 'L'}${px(p[1]).toFixed(1)},${py(p[0]).toFixed(1)}`
   ).join(' ');
 
-  // Fill land area (close path to right edge)
   const lastPt = COASTLINE[COASTLINE.length - 1];
   const firstPt = COASTLINE[0];
   const landPath = coastPath
-    + ` L${W},${py(lastPt[0]).toFixed(1)} L${W},${py(firstPt[0]).toFixed(1)} Z`;
+    + ` L${W + 5},${py(lastPt[0]).toFixed(1)} L${W + 5},${py(firstPt[0]).toFixed(1)} Z`;
 
   // Active spot marker
   const spotX = px(LNG()).toFixed(1);
   const spotY = py(LAT()).toFixed(1);
 
-  // Buoy labels
+  // Buoy markers
   let buoyMarkers = '';
   for (const b of buoys) {
     const bx = px(b.lon).toFixed(1);
     const by = py(b.lat).toFixed(1);
     const isActive = b.id === ACTIVE?.buoyId;
 
-    // Dot
     const dotColor = b.offline ? '#555' : b.wvHt != null ? '#00d4aa' : '#ffb300';
     const dotR = isActive ? 5 : 3.5;
     buoyMarkers += `<circle cx="${bx}" cy="${by}" r="${dotR}" fill="${dotColor}" stroke="${isActive ? '#fff' : 'none'}" stroke-width="${isActive ? 1.5 : 0}"/>`;
 
-    // Data label
     if (!b.offline) {
       const lines = [];
       if (b.wvHt != null) lines.push(`${b.wvHt.toFixed(1)}ft ${b.dpd ?? ''}s ${b.mwd != null ? degToCompass(b.mwd) : ''}`);
       if (b.wspd != null) lines.push(`wind ${b.wspd.toFixed(0)}kts ${b.wdir != null ? degToCompass(b.wdir) : ''}`);
 
-      // Position label to avoid coastline overlap
       const labelX = parseFloat(bx) < W / 2 ? parseFloat(bx) - 6 : parseFloat(bx) + 6;
       const anchor = parseFloat(bx) < W / 2 ? 'end' : 'start';
 
@@ -2484,8 +2522,6 @@ function renderBuoyMap(buoys) {
         buoyMarkers += `<text x="${labelX}" y="${parseFloat(by) + 2 + li * 10}" text-anchor="${anchor}" fill="#ccd6e0" font-size="8" font-family="monospace" font-weight="600">${line}</text>`;
       });
 
-      // Two arrows per buoy:
-      // 1. Swell (blue solid) - direction waves are traveling
       if (b.mwd != null && b.wvHt != null) {
         const len = 14;
         const rad = ((b.mwd + 180) * Math.PI) / 180;
@@ -2493,7 +2529,6 @@ function renderBuoyMap(buoys) {
         const ay = parseFloat(by) - Math.cos(rad) * len;
         buoyMarkers += `<line x1="${bx}" y1="${by}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="#1e90ff" stroke-width="2" marker-end="url(#arrowSwell)"/>`;
       }
-      // 2. Wind (green dashed) - direction wind is blowing TO
       if (b.wdir != null && b.wspd != null && b.wspd > 1) {
         const len = 14;
         const rad = ((b.wdir + 180) * Math.PI) / 180;
@@ -2507,14 +2542,14 @@ function renderBuoyMap(buoys) {
     }
   }
 
-  // Latitude labels
+  // Latitude labels every 2 degrees
   let latLabels = '';
-  for (let lat = 36; lat <= 38; lat++) {
+  for (let lat = 33; lat <= 48; lat += 2) {
     latLabels += `<text x="3" y="${py(lat).toFixed(1)}" fill="#3a5068" font-size="7" font-family="monospace" dominant-baseline="middle">${lat}°N</text>`;
     latLabels += `<line x1="${PAD}" y1="${py(lat).toFixed(1)}" x2="${W - PAD}" y2="${py(lat).toFixed(1)}" stroke="#1a2e45" stroke-width="0.5" stroke-dasharray="2,4"/>`;
   }
 
-  const svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
+  const svg = `<svg id="buoy-map-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:100%;cursor:grab;touch-action:none">
     <defs>
       <marker id="arrowSwell" markerWidth="5" markerHeight="4" refX="5" refY="2" orient="auto">
         <polygon points="0 0, 5 2, 0 4" fill="#1e90ff"/>
@@ -2523,7 +2558,7 @@ function renderBuoyMap(buoys) {
         <polygon points="0 0, 5 2, 0 4" fill="#00c853" class="wind-arrow-fill"/>
       </marker>
     </defs>
-    <rect width="${W}" height="${H}" fill="#0d1f35" rx="6"/>
+    <rect x="-20" y="-20" width="${W + 40}" height="${H + 40}" fill="#0d1f35"/>
     ${latLabels}
     <path d="${landPath}" fill="#152238" stroke="none"/>
     <path d="${coastPath}" fill="none" stroke="#2a4a6b" stroke-width="1.5" stroke-linejoin="round"/>
@@ -2545,46 +2580,114 @@ function renderBuoyMap(buoys) {
     + legend
     + `<div class="buoy-source"><a href="https://www.ndbc.noaa.gov/" target="_blank" rel="noopener" class="src-link">NDBC Buoy Network ↗</a></div>`);
 
-  startBuoyWindAnimation(buoys, W, H, PAD, LAT_MIN, LAT_MAX, LON_MIN, LON_MAX);
+  // Store state for wind animation restarts after pan
+  _buoyMapState = { buoys, W, H, PAD, FLAT, FLAT2, FLON, FLON2, px, py };
+
+  // Set initial viewBox centered on active spot
+  const svgEl = document.getElementById('buoy-map-svg');
+  const wrap = svgEl.closest('.buoy-map-wrap');
+  const wrapRect = wrap.getBoundingClientRect();
+  const containerAR = wrapRect.width / (wrapRect.height || 380);
+
+  const vbH = 160; // ~4° latitude span, similar zoom to original map
+  const vbW = vbH * containerAR;
+  const cx = px(LNG());
+  const cy = py(LAT());
+  let vx = Math.max(0, Math.min(W - vbW, cx - vbW / 2));
+  let vy = Math.max(0, Math.min(H - vbH, cy - vbH / 2));
+
+  svgEl.setAttribute('viewBox', `${vx.toFixed(1)} ${vy.toFixed(1)} ${vbW.toFixed(1)} ${vbH.toFixed(1)}`);
+
+  setupMapPan(svgEl, W, H);
+  startBuoyWindAnimation();
 }
 
-// ─── Wind Particle Animation (Windy-style) on Buoy Map ───────────────────────
-let _mapWindAnim = null;
+// ─── Map Pan Interaction ─────────────────────────────────────────────────────
+function setupMapPan(svgEl, mapW, mapH) {
+  let dragging = false;
+  let startX, startY, startVBX, startVBY, vbW, vbH;
 
-function startBuoyWindAnimation(buoys, svgW, svgH, pad, latMin, latMax, lonMin, lonMax) {
+  svgEl.addEventListener('pointerdown', e => {
+    dragging = true;
+    const vb = svgEl.getAttribute('viewBox').split(' ').map(Number);
+    [startVBX, startVBY, vbW, vbH] = vb;
+    startX = e.clientX;
+    startY = e.clientY;
+    svgEl.setPointerCapture(e.pointerId);
+    svgEl.style.cursor = 'grabbing';
+    if (_mapWindAnim) { cancelAnimationFrame(_mapWindAnim.raf); _mapWindAnim = null; }
+  });
+
+  svgEl.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const rect = svgEl.getBoundingClientRect();
+    const dx = (e.clientX - startX) * (vbW / rect.width);
+    const dy = (e.clientY - startY) * (vbH / rect.height);
+    let nx = Math.max(0, Math.min(mapW - vbW, startVBX - dx));
+    let ny = Math.max(0, Math.min(mapH - vbH, startVBY - dy));
+    svgEl.setAttribute('viewBox', `${nx.toFixed(1)} ${ny.toFixed(1)} ${vbW.toFixed(1)} ${vbH.toFixed(1)}`);
+  });
+
+  svgEl.addEventListener('pointerup', () => {
+    if (!dragging) return;
+    dragging = false;
+    svgEl.style.cursor = 'grab';
+    startBuoyWindAnimation();
+  });
+
+  svgEl.addEventListener('pointercancel', () => {
+    dragging = false;
+    svgEl.style.cursor = 'grab';
+  });
+}
+
+// ─── Wind Color Overlay + Particle Animation ─────────────────────────────────
+function windColorRGB(spd) {
+  if (spd < 5)  return [0, 200, 83];
+  if (spd < 11) return [105, 240, 174];
+  if (spd < 17) return [255, 235, 59];
+  if (spd < 22) return [255, 152, 0];
+  if (spd < 34) return [244, 67, 54];
+  return [183, 28, 28];
+}
+
+function startBuoyWindAnimation() {
   if (_mapWindAnim) { cancelAnimationFrame(_mapWindAnim.raf); _mapWindAnim = null; }
+  if (!_buoyMapState) return;
 
   const canvas = document.getElementById('buoy-wind-canvas');
-  if (!canvas) return;
+  const svgEl = document.getElementById('buoy-map-svg');
+  if (!canvas || !svgEl) return;
   const ctx = canvas.getContext('2d');
 
-  // Match canvas to the rendered SVG size
-  const svgEl = canvas.previousElementSibling;
-  const rect = svgEl.getBoundingClientRect();
+  const vb = svgEl.getAttribute('viewBox').split(' ').map(Number);
+  const [vbX, vbY, vbW, vbH] = vb;
+  const { buoys, W, H, PAD, FLAT, FLAT2, FLON, FLON2, px, py } = _buoyMapState;
+
+  // Size canvas to match SVG display area
+  const svgRect = svgEl.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
-  const cw = rect.width;
-  const ch = rect.height;
+  const cw = svgRect.width;
+  const ch = svgRect.height;
   canvas.width = cw * dpr;
   canvas.height = ch * dpr;
   canvas.style.width = cw + 'px';
   canvas.style.height = ch + 'px';
   ctx.scale(dpr, dpr);
 
-  // Coordinate mappers (SVG viewBox -> canvas pixels)
-  const scaleX = cw / svgW;
-  const scaleY = ch / svgH;
-  const pxFromLon = (lon) => (pad + ((lon - lonMin) / (lonMax - lonMin)) * (svgW - pad * 2)) * scaleX;
-  const pyFromLat = (lat) => (pad + ((latMax - lat) / (latMax - latMin)) * (svgH - pad * 2)) * scaleY;
+  // Coordinate mapping: canvas ↔ SVG viewBox
+  const svgToCanvasX = (sx) => ((sx - vbX) / vbW) * cw;
+  const svgToCanvasY = (sy) => ((sy - vbY) / vbH) * ch;
 
-  // Build ocean clip path from coastline (ocean = left of coast)
-  const coastPts = COASTLINE.map(p => [pxFromLon(p[1]), pyFromLat(p[0])]);
+  // Build coastline in canvas coordinates
+  const coastPts = COASTLINE.map(p => [svgToCanvasX(px(p[1])), svgToCanvasY(py(p[0]))]);
 
-  // Build wind sources from buoys with wind data
+  // Build wind sources in canvas coordinates
   const windSources = buoys
     .filter(b => !b.offline && b.wspd != null && b.wspd > 0.5 && b.wdir != null)
     .map(b => ({
-      x: pxFromLon(b.lon),
-      y: pyFromLat(b.lat),
+      x: svgToCanvasX(px(b.lon)),
+      y: svgToCanvasY(py(b.lat)),
       dir: b.wdir,
       speed: b.wspd,
       gust: b.gust || b.wspd,
@@ -2592,7 +2695,6 @@ function startBuoyWindAnimation(buoys, svgW, svgH, pad, latMin, latMax, lonMin, 
 
   if (windSources.length === 0) return;
 
-  // Interpolate wind at a point using inverse-distance weighting
   function windAt(x, y) {
     let wSin = 0, wCos = 0, wSpd = 0, wGust = 0, wTotal = 0;
     for (const s of windSources) {
@@ -2613,9 +2715,7 @@ function startBuoyWindAnimation(buoys, svgW, svgH, pad, latMin, latMax, lonMin, 
     };
   }
 
-  // Check if a point is on the ocean side (left of coastline)
   function isOcean(x, y) {
-    // Find the coastline segment at this y level and check if x is to its left
     for (let i = 0; i < coastPts.length - 1; i++) {
       const [x1, y1] = coastPts[i];
       const [x2, y2] = coastPts[i + 1];
@@ -2628,7 +2728,24 @@ function startBuoyWindAnimation(buoys, svgW, svgH, pad, latMin, latMax, lonMin, 
     return false;
   }
 
-  // Particle system - subtle, slow-drifting streaks
+  // Precompute wind color overlay (offscreen canvas at CSS resolution)
+  const overlayCanvas = document.createElement('canvas');
+  overlayCanvas.width = Math.ceil(cw);
+  overlayCanvas.height = Math.ceil(ch);
+  const oc = overlayCanvas.getContext('2d');
+  const cellSize = 8;
+  for (let y = 0; y < ch; y += cellSize) {
+    for (let x = 0; x < cw; x += cellSize) {
+      const mx = x + cellSize / 2, my = y + cellSize / 2;
+      if (!isOcean(mx, my)) continue;
+      const w = windAt(mx, my);
+      const [r, g, b] = windColorRGB(w.speed);
+      oc.fillStyle = `rgba(${r},${g},${b},0.13)`;
+      oc.fillRect(x, y, cellSize, cellSize);
+    }
+  }
+
+  // Particle system
   const avgSpeed = windSources.reduce((s, b) => s + b.speed, 0) / windSources.length;
   const count = Math.min(Math.floor(20 + avgSpeed * 2), 80);
   const particles = [];
@@ -2643,7 +2760,6 @@ function startBuoyWindAnimation(buoys, svgW, svgH, pad, latMin, latMax, lonMin, 
     if (attempts >= 20) { x = Math.random() * cw * 0.4; y = Math.random() * ch; }
 
     const w = windAt(x, y);
-    // Wind dir is "from" direction, particles move opposite
     const rad = ((w.dir + 180) % 360) * Math.PI / 180;
     const spd = w.speed * 0.6 + Math.random() * (w.gust - w.speed) * 0.4;
     const pxPerFrame = 0.06 + spd * 0.025;
@@ -2662,17 +2778,11 @@ function startBuoyWindAnimation(buoys, svgW, svgH, pad, latMin, latMax, lonMin, 
 
   for (let i = 0; i < count; i++) particles.push(spawnParticle(true));
 
-  function windColor(spd) {
-    if (spd < 5)  return [0, 200, 83];
-    if (spd < 11) return [105, 240, 174];
-    if (spd < 17) return [255, 235, 59];
-    if (spd < 22) return [255, 152, 0];
-    if (spd < 34) return [244, 67, 54];
-    return [183, 28, 28];
-  }
-
   function draw() {
     ctx.clearRect(0, 0, cw, ch);
+
+    // Draw cached wind color overlay
+    ctx.drawImage(overlayCanvas, 0, 0);
 
     for (let i = 0; i < particles.length; i++) {
       const p = particles[i];
@@ -2696,7 +2806,7 @@ function startBuoyWindAnimation(buoys, svgW, svgH, pad, latMin, latMax, lonMin, 
       const tailX = p.x - p.vx * (p.len / mag);
       const tailY = p.y - p.vy * (p.len / mag);
 
-      const [r, g, b] = windColor(p.speed);
+      const [r, g, b] = windColorRGB(p.speed);
       ctx.beginPath();
       ctx.moveTo(tailX, tailY);
       ctx.lineTo(p.x, p.y);
