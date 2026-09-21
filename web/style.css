@@ -587,11 +587,14 @@ main {
   font-family: monospace;
 }
 
-/* Buoy map wind animation */
+/* Buoy map - pannable West Coast view */
 .buoy-map-wrap {
   position: relative;
+  height: 380px;
+  overflow: hidden;
+  border-radius: 6px;
 }
-.buoy-map-wrap svg { display: block; width: 100%; height: auto; }
+.buoy-map-wrap svg { display: block; width: 100%; height: 100%; }
 #buoy-wind-canvas {
   position: absolute;
   inset: 0;
