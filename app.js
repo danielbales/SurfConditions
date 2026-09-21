@@ -1498,6 +1498,44 @@ async function loadTides() {
       <div class="tide-schedule">${scheduleHTML || '<div class="error-msg">No events today</div>'}</div>
       <div class="buoy-source" style="margin-top:6px"><a href="https://tidesandcurrents.noaa.gov/waterlevels.html?id=${NOAA_STATION()}" target="_blank" rel="noopener" class="src-link">NOAA Tides & Currents · ${tideSource} ↗</a></div>
     `);
+
+    // ── Mini tide widget inside wind card ────────────────────────────────────
+    const miniEl = document.getElementById('tide-mini');
+    if (miniEl) {
+      const nextEvent = events.find(e => e.t > now);
+      const nextLabel = nextEvent
+        ? `${nextEvent.type === 'H' ? 'High' : 'Low'} ${nextEvent.v.toFixed(1)}ft @ ${fmtTime(nextEvent.t)}`
+        : '';
+
+      // Mini sparkline: 3h back to 6h ahead
+      const mStart = new Date(now.getTime() - 3 * 3600000);
+      const mEnd   = new Date(now.getTime() + 6 * 3600000);
+      const mPts   = hourly.filter(p => p.t >= mStart && p.t <= mEnd);
+      let miniSvg = '';
+      if (mPts.length >= 2) {
+        const mW = 100, mH = 24;
+        const mVals = mPts.map(p => p.v);
+        const mMin = Math.min(...mVals) - 0.2;
+        const mMax = Math.max(...mVals) + 0.2;
+        const mRange = mEnd - mStart;
+        const mx = t => ((t - mStart) / mRange) * mW;
+        const my = v => mH - ((v - mMin) / (mMax - mMin)) * mH;
+        const line = mPts.map((p, i) => `${i === 0 ? 'M' : 'L'}${mx(p.t).toFixed(1)},${my(p.v).toFixed(1)}`).join(' ');
+        const nxPx = mx(now).toFixed(1);
+        const nyPx = my(nowV).toFixed(1);
+        miniSvg = `<svg viewBox="0 0 ${mW} ${mH}" style="width:100%;height:${mH}px;display:block;margin-top:4px">
+          <path d="${line}" fill="none" stroke="#1e90ff" stroke-width="1.5" stroke-linejoin="round" opacity="0.5"/>
+          <circle cx="${nxPx}" cy="${nyPx}" r="2.5" fill="#00d4aa"/>
+        </svg>`;
+      }
+
+      miniEl.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <span style="font-size:11px;color:#1e90ff;font-weight:600">🌊 ${nowV.toFixed(1)}ft <span style="color:var(--text-muted);font-weight:400">${trend}</span></span>
+        </div>
+        <div style="font-size:9px;color:var(--text-muted);margin-top:2px">${nextLabel}</div>
+        ${miniSvg}`;
+    }
   } catch (e) {
     setHTML('tides-body', errorHTML('Tide data unavailable: ' + e.message));
   }
@@ -2693,6 +2731,7 @@ async function refreshAll() {
   setHTML('24h-body',           loadingHTML());
   setHTML('buoy-body',          loadingHTML());
   setHTML('wind-body',          loadingHTML());
+  const _tm = document.getElementById('tide-mini'); if (_tm) _tm.innerHTML = '';
   setHTML('buoy-map-body',      loadingHTML());
   setHTML('swell-body',         loadingHTML());
   setHTML('wind-forecast-body', loadingHTML());

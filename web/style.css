@@ -579,6 +579,14 @@ main {
 
 .rip-desc { font-size: 11px; color: var(--text-secondary); line-height: 1.4; }
 
+/* Mini tide widget (inside wind card) */
+#tide-mini:empty { display: none; }
+#tide-mini {
+  padding: 6px 10px 8px;
+  border-top: 1px solid var(--border);
+  font-family: monospace;
+}
+
 /* Buoy map wind animation */
 .buoy-map-wrap {
   position: relative;
