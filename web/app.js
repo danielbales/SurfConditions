@@ -2594,27 +2594,37 @@ function renderBuoyMap(buoys, asilomarNearshore) {
     }
   }
 
-  // Asilomar nearshore wind marker (distinct style - diamond shape, cyan)
-  if (asilomarNearshore && !asilomarNearshore.offline) {
-    const ax = px(asilomarNearshore.lon);
-    const ay = py(asilomarNearshore.lat);
-    const s = 2.2; // diamond half-size
-    buoyMarkers += `<polygon points="${ax},${ay - s} ${ax + s},${ay} ${ax},${ay + s} ${ax - s},${ay}" fill="#00d4aa" stroke="#fff" stroke-width="0.6"/>`;
-    const lines = [];
-    if (asilomarNearshore.wspd != null) lines.push(`wind ${asilomarNearshore.wspd.toFixed(0)}kts ${asilomarNearshore.wdir != null ? degToCompass(asilomarNearshore.wdir) : ''}`);
-    if (asilomarNearshore.gust != null && asilomarNearshore.gust > asilomarNearshore.wspd) lines.push(`gust ${asilomarNearshore.gust.toFixed(0)}kts`);
-    const labelX = ax + 3;
-    buoyMarkers += `<text x="${labelX.toFixed(1)}" y="${(ay - 4).toFixed(1)}" text-anchor="start" fill="#00d4aa" font-size="3.5" font-family="monospace" font-weight="700">${asilomarNearshore.name}</text>`;
-    lines.forEach((line, li) => {
-      buoyMarkers += `<text x="${labelX.toFixed(1)}" y="${(ay + 1.5 + li * 5).toFixed(1)}" text-anchor="start" fill="#ccd6e0" font-size="3.5" font-family="monospace" font-weight="600">${line}</text>`;
-    });
-    if (asilomarNearshore.wdir != null && asilomarNearshore.wspd > 1) {
-      const len = 7;
-      const rad = ((asilomarNearshore.wdir + 180) * Math.PI) / 180;
-      const awx = ax + Math.sin(rad) * len;
-      const awy = ay - Math.cos(rad) * len;
-      const wc = asilomarNearshore.wspd < 10 ? '#00c853' : asilomarNearshore.wspd < 20 ? '#ffeb3b' : '#f44336';
-      buoyMarkers += `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${awx.toFixed(1)}" y2="${awy.toFixed(1)}" stroke="${wc}" stroke-width="0.8" stroke-dasharray="2,1.5" marker-end="url(#arrowWind)"/>`;
+  // Asilomar nearshore wind marker - offset 15 SVG units west of spot for visibility
+  {
+    const spotPx = px(ASILOMAR_NEARSHORE.lon);
+    const spotPy = py(ASILOMAR_NEARSHORE.lat);
+    const ax = spotPx - 15; // offset west so it doesn't overlap spot marker
+    const ay = spotPy;
+    const s = 3; // diamond half-size
+    const hasData = asilomarNearshore && !asilomarNearshore.offline && asilomarNearshore.wspd != null;
+    const fillColor = hasData ? '#00d4aa' : '#555';
+    buoyMarkers += `<polygon points="${ax},${ay - s} ${ax + s},${ay} ${ax},${ay + s} ${ax - s},${ay}" fill="${fillColor}" stroke="#fff" stroke-width="0.8"/>`;
+    // Connecting line from diamond to coast
+    buoyMarkers += `<line x1="${ax + s}" y1="${ay}" x2="${spotPx}" y2="${spotPy}" stroke="#00d4aa" stroke-width="0.4" stroke-dasharray="1.5,1" opacity="0.5"/>`;
+    if (hasData) {
+      const a = asilomarNearshore;
+      const lines = [];
+      lines.push(`${a.wspd.toFixed(0)}kts ${a.wdir != null ? degToCompass(a.wdir) : ''}`);
+      if (a.gust != null && a.gust > a.wspd) lines.push(`gust ${a.gust.toFixed(0)}kts`);
+      buoyMarkers += `<text x="${(ax - 3).toFixed(1)}" y="${(ay - 5).toFixed(1)}" text-anchor="end" fill="#00d4aa" font-size="3.5" font-family="monospace" font-weight="700">Asilomar</text>`;
+      lines.forEach((line, li) => {
+        buoyMarkers += `<text x="${(ax - 3).toFixed(1)}" y="${(ay + 1 + li * 5).toFixed(1)}" text-anchor="end" fill="#ccd6e0" font-size="3.5" font-family="monospace" font-weight="600">${line}</text>`;
+      });
+      if (a.wdir != null && a.wspd > 1) {
+        const len = 8;
+        const rad = ((a.wdir + 180) * Math.PI) / 180;
+        const awx = ax + Math.sin(rad) * len;
+        const awy = ay - Math.cos(rad) * len;
+        const wc = a.wspd < 10 ? '#00c853' : a.wspd < 20 ? '#ffeb3b' : '#f44336';
+        buoyMarkers += `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${awx.toFixed(1)}" y2="${awy.toFixed(1)}" stroke="${wc}" stroke-width="0.8" stroke-dasharray="2,1.5" marker-end="url(#arrowWind)"/>`;
+      }
+    } else {
+      buoyMarkers += `<text x="${(ax - 3).toFixed(1)}" y="${(ay + 1.5).toFixed(1)}" text-anchor="end" fill="#555" font-size="3.5" font-family="monospace">Asilomar</text>`;
     }
   }
 
