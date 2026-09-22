@@ -600,6 +600,35 @@ main {
   inset: 0;
   pointer-events: none;
 }
+.buoy-popup {
+  position: absolute;
+  display: none;
+  transform: translate(-50%, -100%) translateY(-10px);
+  background: rgba(10,22,40,0.94);
+  border: 1px solid rgba(30,144,255,0.4);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-family: monospace;
+  font-size: 11px;
+  color: #ccd6e0;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 10;
+  line-height: 1.5;
+}
+.buoy-popup.visible { display: block; }
+.buoy-popup::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  transform: translateX(-50%) rotate(45deg);
+  width: 8px;
+  height: 8px;
+  background: rgba(10,22,40,0.94);
+  border-right: 1px solid rgba(30,144,255,0.4);
+  border-bottom: 1px solid rgba(30,144,255,0.4);
+}
 
 /* NOAA buoy */
 .buoy-source {
