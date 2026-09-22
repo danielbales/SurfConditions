@@ -2474,18 +2474,27 @@ const COASTLINE = [
 let _buoyMapState = null;
 let _mapWindAnim = null;
 
+// Nearshore wind point just off Asilomar (~0.5nm offshore)
+const ASILOMAR_NEARSHORE = { lat: 36.621, lon: -121.955, name: 'Asilomar' };
+
 async function loadBuoyMap() {
   try {
-    const results = await Promise.allSettled(
-      MAP_BUOYS.map(b =>
-        fetch(`${WORKER_URL}/proxy/ndbc/${b.id}`)
-          .then(r => r.ok ? r.json() : null)
-          .catch(() => null)
-      )
-    );
+    // Fetch NDBC buoys + Open-Meteo nearshore wind for Asilomar in parallel
+    const [buoyResults, asilomarRes] = await Promise.all([
+      Promise.allSettled(
+        MAP_BUOYS.map(b =>
+          fetch(`${WORKER_URL}/proxy/ndbc/${b.id}`)
+            .then(r => r.ok ? r.json() : null)
+            .catch(() => null)
+        )
+      ),
+      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${ASILOMAR_NEARSHORE.lat}&longitude=${ASILOMAR_NEARSHORE.lon}&current=wind_speed_10m,wind_gusts_10m,wind_direction_10m&wind_speed_unit=kn&timezone=auto`)
+        .then(r => r.ok ? r.json() : null)
+        .catch(() => null),
+    ]);
 
     const buoyData = MAP_BUOYS.map((b, i) => {
-      const r = results[i].status === 'fulfilled' ? results[i].value : null;
+      const r = buoyResults[i].status === 'fulfilled' ? buoyResults[i].value : null;
       if (!r || !r.ok) return { ...b, offline: true };
       const wv = r.wave || {};
       const wind = r.wind || {};
@@ -2500,13 +2509,26 @@ async function loadBuoyMap() {
       };
     });
 
-    renderBuoyMap(buoyData);
+    // Add Asilomar nearshore wind as a special entry
+    let asilomarData = { ...ASILOMAR_NEARSHORE, nearshore: true, offline: true };
+    if (asilomarRes?.current) {
+      const c = asilomarRes.current;
+      asilomarData = {
+        ...ASILOMAR_NEARSHORE,
+        nearshore: true,
+        wspd: c.wind_speed_10m,
+        wdir: c.wind_direction_10m,
+        gust: c.wind_gusts_10m,
+      };
+    }
+
+    renderBuoyMap(buoyData, asilomarData);
   } catch (e) {
     setHTML('buoy-map-body', errorHTML('Buoy map unavailable: ' + e.message));
   }
 }
 
-function renderBuoyMap(buoys) {
+function renderBuoyMap(buoys, asilomarNearshore) {
   // Full West Coast coordinate system
   const FLAT = 32, FLAT2 = 49, FLON = -129, FLON2 = -115.5;
   const W = 540, H = 680, PAD = 5;
@@ -2572,6 +2594,30 @@ function renderBuoyMap(buoys) {
     }
   }
 
+  // Asilomar nearshore wind marker (distinct style - diamond shape, cyan)
+  if (asilomarNearshore && !asilomarNearshore.offline) {
+    const ax = px(asilomarNearshore.lon);
+    const ay = py(asilomarNearshore.lat);
+    const s = 2.2; // diamond half-size
+    buoyMarkers += `<polygon points="${ax},${ay - s} ${ax + s},${ay} ${ax},${ay + s} ${ax - s},${ay}" fill="#00d4aa" stroke="#fff" stroke-width="0.6"/>`;
+    const lines = [];
+    if (asilomarNearshore.wspd != null) lines.push(`wind ${asilomarNearshore.wspd.toFixed(0)}kts ${asilomarNearshore.wdir != null ? degToCompass(asilomarNearshore.wdir) : ''}`);
+    if (asilomarNearshore.gust != null && asilomarNearshore.gust > asilomarNearshore.wspd) lines.push(`gust ${asilomarNearshore.gust.toFixed(0)}kts`);
+    const labelX = ax + 3;
+    buoyMarkers += `<text x="${labelX.toFixed(1)}" y="${(ay - 4).toFixed(1)}" text-anchor="start" fill="#00d4aa" font-size="3.5" font-family="monospace" font-weight="700">${asilomarNearshore.name}</text>`;
+    lines.forEach((line, li) => {
+      buoyMarkers += `<text x="${labelX.toFixed(1)}" y="${(ay + 1.5 + li * 5).toFixed(1)}" text-anchor="start" fill="#ccd6e0" font-size="3.5" font-family="monospace" font-weight="600">${line}</text>`;
+    });
+    if (asilomarNearshore.wdir != null && asilomarNearshore.wspd > 1) {
+      const len = 7;
+      const rad = ((asilomarNearshore.wdir + 180) * Math.PI) / 180;
+      const awx = ax + Math.sin(rad) * len;
+      const awy = ay - Math.cos(rad) * len;
+      const wc = asilomarNearshore.wspd < 10 ? '#00c853' : asilomarNearshore.wspd < 20 ? '#ffeb3b' : '#f44336';
+      buoyMarkers += `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${awx.toFixed(1)}" y2="${awy.toFixed(1)}" stroke="${wc}" stroke-width="0.8" stroke-dasharray="2,1.5" marker-end="url(#arrowWind)"/>`;
+    }
+  }
+
   // Latitude labels every 2 degrees
   let latLabels = '';
   for (let lat = 33; lat <= 48; lat += 2) {
@@ -2603,6 +2649,7 @@ function renderBuoyMap(buoys) {
     + `<span><span style="display:inline-block;width:6px;height:6px;border-radius:3px;background:#00d4aa;vertical-align:middle;margin-right:3px"></span>Wave data</span>`
     + `<span><span style="display:inline-block;width:6px;height:6px;border-radius:3px;background:#ffb300;vertical-align:middle;margin-right:3px"></span>Wind only</span>`
     + `<span><span style="display:inline-block;width:6px;height:6px;border-radius:50%;border:1.5px solid #ff6b6b;vertical-align:middle;margin-right:3px"></span>Your spot</span>`
+    + `<span><span style="display:inline-block;width:6px;height:6px;background:#00d4aa;transform:rotate(45deg);vertical-align:middle;margin-right:3px"></span>Nearshore</span>`
     + `</div>`;
 
   setHTML('buoy-map-body',
@@ -2610,8 +2657,13 @@ function renderBuoyMap(buoys) {
     + legend
     + `<div class="buoy-source"><a href="https://www.ndbc.noaa.gov/" target="_blank" rel="noopener" class="src-link">NDBC Buoy Network ↗</a></div>`);
 
+  // Include Asilomar nearshore in buoy array for wind animation interpolation
+  const allWindSources = asilomarNearshore && !asilomarNearshore.offline
+    ? [...buoys, asilomarNearshore]
+    : buoys;
+
   // Store state for wind animation restarts after pan
-  _buoyMapState = { buoys, W, H, PAD, FLAT, FLAT2, FLON, FLON2, px, py };
+  _buoyMapState = { buoys: allWindSources, W, H, PAD, FLAT, FLAT2, FLON, FLON2, px, py };
 
   // Set initial viewBox centered on active spot
   const svgEl = document.getElementById('buoy-map-svg');
