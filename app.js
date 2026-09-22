@@ -2550,82 +2550,46 @@ function renderBuoyMap(buoys, asilomarNearshore) {
   const spotX = px(LNG()).toFixed(1);
   const spotY = py(LAT()).toFixed(1);
 
-  // Buoy markers
+  // Build tappable marker list (dots only - details shown on tap)
   let buoyMarkers = '';
+  const tappablePoints = []; // { cx, cy, name, lines[] } for tap-to-reveal
+
   for (const b of buoys) {
-    const bx = px(b.lon).toFixed(1);
-    const by = py(b.lat).toFixed(1);
+    const bx = parseFloat(px(b.lon).toFixed(1));
+    const by = parseFloat(py(b.lat).toFixed(1));
     const isActive = b.id === ACTIVE?.buoyId;
-
     const dotColor = b.offline ? '#555' : b.wvHt != null ? '#00d4aa' : '#ffb300';
-    const dotR = isActive ? 2.5 : 1.8;
-    buoyMarkers += `<circle cx="${bx}" cy="${by}" r="${dotR}" fill="${dotColor}" stroke="${isActive ? '#fff' : 'none'}" stroke-width="${isActive ? 0.8 : 0}"/>`;
+    const dotR = isActive ? 3 : 2;
+    buoyMarkers += `<circle cx="${bx}" cy="${by}" r="${dotR}" fill="${dotColor}" stroke="${isActive ? '#fff' : '#0f1f3d'}" stroke-width="${isActive ? 0.8 : 0.4}"/>`;
 
+    // Build info for tap popup
+    const lines = [];
     if (!b.offline) {
-      const lines = [];
-      if (b.wvHt != null) lines.push(`${b.wvHt.toFixed(1)}ft ${b.dpd ?? ''}s ${b.mwd != null ? degToCompass(b.mwd) : ''}`);
-      if (b.wspd != null) lines.push(`wind ${b.wspd.toFixed(0)}kts ${b.wdir != null ? degToCompass(b.wdir) : ''}`);
-
-      const labelX = parseFloat(bx) < W / 2 ? parseFloat(bx) - 3 : parseFloat(bx) + 3;
-      const anchor = parseFloat(bx) < W / 2 ? 'end' : 'start';
-
-      buoyMarkers += `<text x="${labelX}" y="${parseFloat(by) - 5}" text-anchor="${anchor}" fill="#8fa4b8" font-size="3.5" font-family="monospace">${b.name}</text>`;
-      lines.forEach((line, li) => {
-        buoyMarkers += `<text x="${labelX}" y="${parseFloat(by) + 1 + li * 5}" text-anchor="${anchor}" fill="#ccd6e0" font-size="3.5" font-family="monospace" font-weight="600">${line}</text>`;
-      });
-
-      if (b.mwd != null && b.wvHt != null) {
-        const len = 7;
-        const rad = ((b.mwd + 180) * Math.PI) / 180;
-        const ax = parseFloat(bx) + Math.sin(rad) * len;
-        const ay = parseFloat(by) - Math.cos(rad) * len;
-        buoyMarkers += `<line x1="${bx}" y1="${by}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="#1e90ff" stroke-width="1" marker-end="url(#arrowSwell)"/>`;
-      }
-      if (b.wdir != null && b.wspd != null && b.wspd > 1) {
-        const len = 7;
-        const rad = ((b.wdir + 180) * Math.PI) / 180;
-        const ax = parseFloat(bx) + Math.sin(rad) * len;
-        const ay = parseFloat(by) - Math.cos(rad) * len;
-        const wc = b.wspd < 10 ? '#00c853' : b.wspd < 20 ? '#ffeb3b' : '#f44336';
-        buoyMarkers += `<line x1="${bx}" y1="${by}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="${wc}" stroke-width="0.8" stroke-dasharray="2,1.5" marker-end="url(#arrowWind)"/>`;
-      }
+      if (b.wvHt != null) lines.push(`${b.wvHt.toFixed(1)}ft ${b.dpd ?? '—'}s ${b.mwd != null ? degToCompass(b.mwd) : ''}`);
+      if (b.wspd != null) lines.push(`Wind ${b.wspd.toFixed(0)}kts ${b.wdir != null ? degToCompass(b.wdir) : ''}`);
+      if (b.gust != null && b.gust > (b.wspd || 0)) lines.push(`Gust ${b.gust.toFixed(0)}kts`);
     } else {
-      buoyMarkers += `<text x="${parseFloat(bx) + 3}" y="${parseFloat(by) + 1.5}" fill="#555" font-size="3.5" font-family="monospace">${b.name}</text>`;
+      lines.push('Offline');
     }
+    tappablePoints.push({ cx: bx, cy: by, name: b.name, lines, type: 'buoy' });
   }
 
-  // Asilomar nearshore wind marker - offset 15 SVG units west of spot for visibility
+  // Asilomar nearshore - diamond marker
   {
-    const spotPx = px(ASILOMAR_NEARSHORE.lon);
-    const spotPy = py(ASILOMAR_NEARSHORE.lat);
-    const ax = spotPx - 15; // offset west so it doesn't overlap spot marker
-    const ay = spotPy;
-    const s = 3; // diamond half-size
+    const bx = parseFloat(px(ASILOMAR_NEARSHORE.lon).toFixed(1));
+    const by = parseFloat(py(ASILOMAR_NEARSHORE.lat).toFixed(1));
+    const s = 2.5;
     const hasData = asilomarNearshore && !asilomarNearshore.offline && asilomarNearshore.wspd != null;
-    const fillColor = hasData ? '#00d4aa' : '#555';
-    buoyMarkers += `<polygon points="${ax},${ay - s} ${ax + s},${ay} ${ax},${ay + s} ${ax - s},${ay}" fill="${fillColor}" stroke="#fff" stroke-width="0.8"/>`;
-    // Connecting line from diamond to coast
-    buoyMarkers += `<line x1="${ax + s}" y1="${ay}" x2="${spotPx}" y2="${spotPy}" stroke="#00d4aa" stroke-width="0.4" stroke-dasharray="1.5,1" opacity="0.5"/>`;
+    buoyMarkers += `<polygon points="${bx},${by - s} ${bx + s},${by} ${bx},${by + s} ${bx - s},${by}" fill="${hasData ? '#00d4aa' : '#555'}" stroke="#fff" stroke-width="0.6"/>`;
+    const lines = [];
     if (hasData) {
       const a = asilomarNearshore;
-      const lines = [];
-      lines.push(`${a.wspd.toFixed(0)}kts ${a.wdir != null ? degToCompass(a.wdir) : ''}`);
-      if (a.gust != null && a.gust > a.wspd) lines.push(`gust ${a.gust.toFixed(0)}kts`);
-      buoyMarkers += `<text x="${(ax - 3).toFixed(1)}" y="${(ay - 5).toFixed(1)}" text-anchor="end" fill="#00d4aa" font-size="3.5" font-family="monospace" font-weight="700">Asilomar</text>`;
-      lines.forEach((line, li) => {
-        buoyMarkers += `<text x="${(ax - 3).toFixed(1)}" y="${(ay + 1 + li * 5).toFixed(1)}" text-anchor="end" fill="#ccd6e0" font-size="3.5" font-family="monospace" font-weight="600">${line}</text>`;
-      });
-      if (a.wdir != null && a.wspd > 1) {
-        const len = 8;
-        const rad = ((a.wdir + 180) * Math.PI) / 180;
-        const awx = ax + Math.sin(rad) * len;
-        const awy = ay - Math.cos(rad) * len;
-        const wc = a.wspd < 10 ? '#00c853' : a.wspd < 20 ? '#ffeb3b' : '#f44336';
-        buoyMarkers += `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${awx.toFixed(1)}" y2="${awy.toFixed(1)}" stroke="${wc}" stroke-width="0.8" stroke-dasharray="2,1.5" marker-end="url(#arrowWind)"/>`;
-      }
+      lines.push(`Wind ${a.wspd.toFixed(0)}kts ${a.wdir != null ? degToCompass(a.wdir) : ''}`);
+      if (a.gust != null && a.gust > a.wspd) lines.push(`Gust ${a.gust.toFixed(0)}kts`);
     } else {
-      buoyMarkers += `<text x="${(ax - 3).toFixed(1)}" y="${(ay + 1.5).toFixed(1)}" text-anchor="end" fill="#555" font-size="3.5" font-family="monospace">Asilomar</text>`;
+      lines.push('No data');
     }
+    tappablePoints.push({ cx: bx, cy: by, name: 'Asilomar Nearshore', lines, type: 'nearshore' });
   }
 
   // Latitude labels every 2 degrees
@@ -2654,16 +2618,15 @@ function renderBuoyMap(buoys, asilomarNearshore) {
   </svg>`;
 
   const legend = `<div style="display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:6px;font-size:8px;color:var(--text-muted);font-family:monospace">`
-    + `<span><span style="display:inline-block;width:10px;height:0;border-top:2px solid #1e90ff;vertical-align:middle;margin-right:3px"></span>Swell</span>`
-    + `<span><span style="display:inline-block;width:10px;height:0;border-top:1px dashed #00c853;vertical-align:middle;margin-right:3px"></span>Wind</span>`
     + `<span><span style="display:inline-block;width:6px;height:6px;border-radius:3px;background:#00d4aa;vertical-align:middle;margin-right:3px"></span>Wave data</span>`
     + `<span><span style="display:inline-block;width:6px;height:6px;border-radius:3px;background:#ffb300;vertical-align:middle;margin-right:3px"></span>Wind only</span>`
-    + `<span><span style="display:inline-block;width:6px;height:6px;border-radius:50%;border:1.5px solid #ff6b6b;vertical-align:middle;margin-right:3px"></span>Your spot</span>`
     + `<span><span style="display:inline-block;width:6px;height:6px;background:#00d4aa;transform:rotate(45deg);vertical-align:middle;margin-right:3px"></span>Nearshore</span>`
+    + `<span><span style="display:inline-block;width:6px;height:6px;border-radius:50%;border:1.5px solid #ff6b6b;vertical-align:middle;margin-right:3px"></span>Your spot</span>`
+    + `<span style="color:#4a7a96">Tap buoy for details</span>`
     + `</div>`;
 
   setHTML('buoy-map-body',
-    `<div class="buoy-map-wrap">${svg}<canvas id="buoy-wind-canvas"></canvas></div>`
+    `<div class="buoy-map-wrap">${svg}<canvas id="buoy-wind-canvas"></canvas><div id="buoy-popup" class="buoy-popup"></div></div>`
     + legend
     + `<div class="buoy-source"><a href="https://www.ndbc.noaa.gov/" target="_blank" rel="noopener" class="src-link">NDBC Buoy Network ↗</a></div>`);
 
@@ -2690,6 +2653,9 @@ function renderBuoyMap(buoys, asilomarNearshore) {
 
   svgEl.setAttribute('viewBox', `${vx.toFixed(1)} ${vy.toFixed(1)} ${vbW.toFixed(1)} ${vbH.toFixed(1)}`);
 
+  // Store tappable points for tap-to-reveal
+  _buoyMapState.tappablePoints = tappablePoints;
+
   setupMapPan(svgEl, W, H);
   startBuoyWindAnimation();
 }
@@ -2699,8 +2665,10 @@ function setupMapPan(svgEl, mapW, mapH) {
   let dragging = false;
   let startX, startY, startVBX, startVBY, vbW, vbH;
   let lastPinchDist = null;
-  const MIN_VBW = 60; // max zoom in (~1.5° span)
-  const MAX_VBW = mapW; // full map
+  let didDrag = false;
+  const MIN_VBW = 60;
+  const MAX_VBW = mapW;
+  const TAP_THRESHOLD = 6; // pixels - less than this is a tap
 
   function getVB() { return svgEl.getAttribute('viewBox').split(' ').map(Number); }
 
@@ -2710,9 +2678,51 @@ function setupMapPan(svgEl, mapW, mapH) {
     svgEl.setAttribute('viewBox', `${x.toFixed(1)} ${y.toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)}`);
   }
 
+  function dismissPopup() {
+    const popup = document.getElementById('buoy-popup');
+    if (popup) popup.classList.remove('visible');
+  }
+
+  function showPopup(clientX, clientY) {
+    if (!_buoyMapState?.tappablePoints) return;
+    const rect = svgEl.getBoundingClientRect();
+    const vb = getVB();
+    // Convert screen coords to SVG coords
+    const svgX = vb[0] + ((clientX - rect.left) / rect.width) * vb[2];
+    const svgY = vb[1] + ((clientY - rect.top) / rect.height) * vb[3];
+
+    // Find nearest tappable point (within 8 SVG units)
+    let best = null, bestDist = 8;
+    for (const pt of _buoyMapState.tappablePoints) {
+      const d = Math.hypot(pt.cx - svgX, pt.cy - svgY);
+      if (d < bestDist) { bestDist = d; best = pt; }
+    }
+    if (!best) { dismissPopup(); return; }
+
+    const popup = document.getElementById('buoy-popup');
+    if (!popup) return;
+
+    const wrap = svgEl.closest('.buoy-map-wrap');
+    const wrapRect = wrap.getBoundingClientRect();
+    // Convert SVG coords back to CSS position within wrap
+    const pxX = ((best.cx - vb[0]) / vb[2]) * wrapRect.width;
+    const pxY = ((best.cy - vb[1]) / vb[3]) * wrapRect.height;
+
+    const typeIcon = best.type === 'nearshore' ? '◆' : '●';
+    const nameColor = best.type === 'nearshore' ? '#00d4aa' : '#8fa4b8';
+    popup.innerHTML = `<div style="font-weight:700;color:${nameColor};margin-bottom:3px">${typeIcon} ${best.name}</div>`
+      + best.lines.map(l => `<div>${l}</div>`).join('');
+
+    // Position: above the dot, centered horizontally
+    popup.style.left = pxX + 'px';
+    popup.style.top = pxY + 'px';
+    popup.classList.add('visible');
+  }
+
   // Single-finger pan via pointer events
   svgEl.addEventListener('pointerdown', e => {
     dragging = true;
+    didDrag = false;
     const vb = getVB();
     [startVBX, startVBY, vbW, vbH] = vb;
     startX = e.clientX;
@@ -2725,16 +2735,23 @@ function setupMapPan(svgEl, mapW, mapH) {
   svgEl.addEventListener('pointermove', e => {
     if (!dragging) return;
     e.preventDefault();
+    const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
+    if (dist > TAP_THRESHOLD) didDrag = true;
     const rect = svgEl.getBoundingClientRect();
     const dx = (e.clientX - startX) * (vbW / rect.width);
     const dy = (e.clientY - startY) * (vbH / rect.height);
     clampVB(startVBX - dx, startVBY - dy, vbW, vbH);
   });
 
-  svgEl.addEventListener('pointerup', () => {
+  svgEl.addEventListener('pointerup', e => {
     if (!dragging) return;
     dragging = false;
     svgEl.style.cursor = 'grab';
+    if (!didDrag) {
+      showPopup(e.clientX, e.clientY);
+    } else {
+      dismissPopup();
+    }
     startBuoyWindAnimation();
   });
 
