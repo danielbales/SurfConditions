@@ -2758,7 +2758,7 @@ function renderBuoyMap(buoys, asilomarNearshore) {
     + `</div>`;
 
   setHTML('buoy-map-body',
-    `<div class="buoy-map-wrap">${svg}<canvas id="buoy-wind-canvas"></canvas><div id="buoy-popup" class="buoy-popup"></div></div>`
+    `<div class="buoy-map-wrap">${svg}<canvas id="buoy-wind-canvas"></canvas><div id="buoy-popup" class="buoy-popup"></div><div class="buoy-map-fullscreen-hint" id="buoy-fs-hint"></div></div>`
     + legend
     + `<div class="buoy-source"><a href="https://www.ndbc.noaa.gov/" target="_blank" rel="noopener" class="src-link">NDBC Buoy Network ↗</a></div>`);
 
@@ -2810,16 +2810,35 @@ function setupMapPan(svgEl, mapW, mapH) {
     svgEl.setAttribute('viewBox', `${x.toFixed(1)} ${y.toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)}`);
   }
 
+  const wrap = svgEl.closest('.buoy-map-wrap');
+  let lastTapTime = 0;
+
+  function isFullscreen() { return wrap.classList.contains('fullscreen'); }
+
+  function toggleFullscreen(goFull) {
+    if (goFull) {
+      wrap.classList.add('fullscreen');
+      const hint = document.getElementById('buoy-fs-hint');
+      if (hint) hint.textContent = 'Double-tap to minimize';
+      // Restart animation to fit new size
+      startBuoyWindAnimation();
+    } else {
+      wrap.classList.remove('fullscreen');
+      const hint = document.getElementById('buoy-fs-hint');
+      if (hint) hint.textContent = '';
+      startBuoyWindAnimation();
+    }
+  }
+
   function dismissPopup() {
     const popup = document.getElementById('buoy-popup');
     if (popup) popup.classList.remove('visible');
   }
 
-  function showPopup(clientX, clientY) {
+  function handleTap(clientX, clientY) {
     if (!_buoyMapState?.tappablePoints) return;
     const rect = svgEl.getBoundingClientRect();
     const vb = getVB();
-    // Convert screen coords to SVG coords
     const svgX = vb[0] + ((clientX - rect.left) / rect.width) * vb[2];
     const svgY = vb[1] + ((clientY - rect.top) / rect.height) * vb[3];
 
@@ -2829,26 +2848,35 @@ function setupMapPan(svgEl, mapW, mapH) {
       const d = Math.hypot(pt.cx - svgX, pt.cy - svgY);
       if (d < bestDist) { bestDist = d; best = pt; }
     }
-    if (!best) { dismissPopup(); return; }
 
-    const popup = document.getElementById('buoy-popup');
-    if (!popup) return;
+    const now = Date.now();
+    const isDoubleTap = (now - lastTapTime) < 350;
+    lastTapTime = now;
 
-    const wrap = svgEl.closest('.buoy-map-wrap');
-    const wrapRect = wrap.getBoundingClientRect();
-    // Convert SVG coords back to CSS position within wrap
-    const pxX = ((best.cx - vb[0]) / vb[2]) * wrapRect.width;
-    const pxY = ((best.cy - vb[1]) / vb[3]) * wrapRect.height;
-
-    const typeIcon = best.type === 'nearshore' ? '◆' : '●';
-    const nameColor = best.type === 'nearshore' ? '#00d4aa' : '#8fa4b8';
-    popup.innerHTML = `<div style="font-weight:700;color:${nameColor};margin-bottom:3px">${typeIcon} ${best.name}</div>`
-      + best.lines.map(l => `<div>${l}</div>`).join('');
-
-    // Position: above the dot, centered horizontally
-    popup.style.left = pxX + 'px';
-    popup.style.top = pxY + 'px';
-    popup.classList.add('visible');
+    if (best) {
+      // Tapped a buoy - show popup
+      dismissPopup();
+      const popup = document.getElementById('buoy-popup');
+      if (!popup) return;
+      const wrapRect = wrap.getBoundingClientRect();
+      const pxX = ((best.cx - vb[0]) / vb[2]) * wrapRect.width;
+      const pxY = ((best.cy - vb[1]) / vb[3]) * wrapRect.height;
+      const typeIcon = best.type === 'nearshore' ? '◆' : '●';
+      const nameColor = best.type === 'nearshore' ? '#00d4aa' : '#8fa4b8';
+      popup.innerHTML = `<div style="font-weight:700;color:${nameColor};margin-bottom:3px">${typeIcon} ${best.name}</div>`
+        + best.lines.map(l => `<div>${l}</div>`).join('');
+      popup.style.left = pxX + 'px';
+      popup.style.top = pxY + 'px';
+      popup.classList.add('visible');
+    } else {
+      // Tapped empty space
+      dismissPopup();
+      if (isFullscreen() && isDoubleTap) {
+        toggleFullscreen(false);
+      } else if (!isFullscreen()) {
+        toggleFullscreen(true);
+      }
+    }
   }
 
   // Track active pointers for pan + pinch
@@ -2924,7 +2952,7 @@ function setupMapPan(svgEl, mapW, mapH) {
       lastPinchDist = null;
       svgEl.style.cursor = 'grab';
       if (!wasDrag) {
-        showPopup(e.clientX, e.clientY);
+        handleTap(e.clientX, e.clientY);
       } else {
         dismissPopup();
       }
