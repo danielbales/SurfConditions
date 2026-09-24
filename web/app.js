@@ -2550,46 +2550,110 @@ function renderBuoyMap(buoys, asilomarNearshore) {
   const spotX = px(LNG()).toFixed(1);
   const spotY = py(LAT()).toFixed(1);
 
-  // Build tappable marker list (dots only - details shown on tap)
+  // Build buoy markers with smart label placement (show text when space allows)
   let buoyMarkers = '';
-  const tappablePoints = []; // { cx, cy, name, lines[] } for tap-to-reveal
+  const tappablePoints = [];
+  const placedBoxes = []; // bounding boxes of labels already placed
+  const CHAR_W = 2; // approx SVG units per char at font-size 3.5
+  const LINE_H = 5; // SVG units per text line
+  const LABEL_PAD = 2; // padding around labels
 
+  function boxOverlaps(box) {
+    for (const b of placedBoxes) {
+      if (box.x1 < b.x2 && box.x2 > b.x1 && box.y1 < b.y2 && box.y2 > b.y1) return true;
+    }
+    return false;
+  }
+
+  // Collect all markers with priority: active buoy first, then Asilomar, then rest
+  const allMarkers = [];
   for (const b of buoys) {
     const bx = parseFloat(px(b.lon).toFixed(1));
     const by = parseFloat(py(b.lat).toFixed(1));
     const isActive = b.id === ACTIVE?.buoyId;
-    const dotColor = b.offline ? '#555' : b.wvHt != null ? '#00d4aa' : '#ffb300';
-    const dotR = isActive ? 3 : 2;
-    buoyMarkers += `<circle cx="${bx}" cy="${by}" r="${dotR}" fill="${dotColor}" stroke="${isActive ? '#fff' : '#0f1f3d'}" stroke-width="${isActive ? 0.8 : 0.4}"/>`;
-
-    // Build info for tap popup
     const lines = [];
     if (!b.offline) {
-      if (b.wvHt != null) lines.push(`${b.wvHt.toFixed(1)}ft ${b.dpd ?? '—'}s ${b.mwd != null ? degToCompass(b.mwd) : ''}`);
-      if (b.wspd != null) lines.push(`Wind ${b.wspd.toFixed(0)}kts ${b.wdir != null ? degToCompass(b.wdir) : ''}`);
-      if (b.gust != null && b.gust > (b.wspd || 0)) lines.push(`Gust ${b.gust.toFixed(0)}kts`);
-    } else {
-      lines.push('Offline');
+      if (b.wvHt != null) lines.push(`${b.wvHt.toFixed(1)}ft ${b.dpd ?? ''}s ${b.mwd != null ? degToCompass(b.mwd) : ''}`);
+      if (b.wspd != null) lines.push(`wind ${b.wspd.toFixed(0)}kts ${b.wdir != null ? degToCompass(b.wdir) : ''}`);
     }
-    tappablePoints.push({ cx: bx, cy: by, name: b.name, lines, type: 'buoy' });
+    const priority = isActive ? 0 : 2;
+    allMarkers.push({ bx, by, name: b.name, lines, isActive, offline: b.offline,
+      dotColor: b.offline ? '#555' : b.wvHt != null ? '#00d4aa' : '#ffb300',
+      type: 'buoy', b, priority });
   }
 
-  // Asilomar nearshore - diamond marker
+  // Asilomar nearshore
   {
     const bx = parseFloat(px(ASILOMAR_NEARSHORE.lon).toFixed(1));
     const by = parseFloat(py(ASILOMAR_NEARSHORE.lat).toFixed(1));
-    const s = 2.5;
     const hasData = asilomarNearshore && !asilomarNearshore.offline && asilomarNearshore.wspd != null;
-    buoyMarkers += `<polygon points="${bx},${by - s} ${bx + s},${by} ${bx},${by + s} ${bx - s},${by}" fill="${hasData ? '#00d4aa' : '#555'}" stroke="#fff" stroke-width="0.6"/>`;
     const lines = [];
     if (hasData) {
-      const a = asilomarNearshore;
-      lines.push(`Wind ${a.wspd.toFixed(0)}kts ${a.wdir != null ? degToCompass(a.wdir) : ''}`);
-      if (a.gust != null && a.gust > a.wspd) lines.push(`Gust ${a.gust.toFixed(0)}kts`);
-    } else {
-      lines.push('No data');
+      lines.push(`wind ${asilomarNearshore.wspd.toFixed(0)}kts ${asilomarNearshore.wdir != null ? degToCompass(asilomarNearshore.wdir) : ''}`);
     }
-    tappablePoints.push({ cx: bx, cy: by, name: 'Asilomar Nearshore', lines, type: 'nearshore' });
+    allMarkers.push({ bx, by, name: 'Asilomar', lines, isActive: false, offline: !hasData,
+      dotColor: hasData ? '#00d4aa' : '#555', type: 'nearshore', b: asilomarNearshore, priority: 1 });
+  }
+
+  // Sort by priority (active first, then nearshore, then rest)
+  allMarkers.sort((a, b) => a.priority - b.priority);
+
+  // Render dots first (always shown), then attempt labels
+  for (const m of allMarkers) {
+    const dotR = m.isActive ? 3 : 2;
+    if (m.type === 'nearshore') {
+      const s = 2.5;
+      buoyMarkers += `<polygon points="${m.bx},${m.by - s} ${m.bx + s},${m.by} ${m.bx},${m.by + s} ${m.bx - s},${m.by}" fill="${m.dotColor}" stroke="#fff" stroke-width="0.6"/>`;
+    } else {
+      buoyMarkers += `<circle cx="${m.bx}" cy="${m.by}" r="${dotR}" fill="${m.dotColor}" stroke="${m.isActive ? '#fff' : '#0f1f3d'}" stroke-width="${m.isActive ? 0.8 : 0.4}"/>`;
+    }
+
+    // Build popup lines (always available for tap)
+    const popupLines = [];
+    if (!m.offline && m.type === 'buoy') {
+      const b = m.b;
+      if (b.wvHt != null) popupLines.push(`${b.wvHt.toFixed(1)}ft ${b.dpd ?? ''}s ${b.mwd != null ? degToCompass(b.mwd) : ''}`);
+      if (b.wspd != null) popupLines.push(`Wind ${b.wspd.toFixed(0)}kts ${b.wdir != null ? degToCompass(b.wdir) : ''}`);
+      if (b.gust != null && b.gust > (b.wspd || 0)) popupLines.push(`Gust ${b.gust.toFixed(0)}kts`);
+    } else if (m.type === 'nearshore' && !m.offline) {
+      const a = m.b;
+      popupLines.push(`Wind ${a.wspd.toFixed(0)}kts ${a.wdir != null ? degToCompass(a.wdir) : ''}`);
+      if (a.gust != null && a.gust > a.wspd) popupLines.push(`Gust ${a.gust.toFixed(0)}kts`);
+    } else {
+      popupLines.push(m.offline ? 'Offline' : 'No data');
+    }
+    tappablePoints.push({ cx: m.bx, cy: m.by, name: m.name, lines: popupLines, type: m.type });
+
+    // Try to place label if there's data to show
+    if (m.offline || m.lines.length === 0) continue;
+    const allText = [m.name, ...m.lines];
+    const maxChars = Math.max(...allText.map(t => t.length));
+    const textW = maxChars * CHAR_W;
+    const textH = allText.length * LINE_H;
+
+    // Try label on the left first, then right
+    const leftSide = m.bx > W / 2;
+    const sides = leftSide ? ['left', 'right'] : ['right', 'left'];
+    let placed = false;
+    for (const side of sides) {
+      const lx = side === 'left' ? m.bx - 3 - textW : m.bx + 3;
+      const ly = m.by - 5;
+      const box = {
+        x1: lx - LABEL_PAD, y1: ly - LINE_H - LABEL_PAD,
+        x2: lx + textW + LABEL_PAD, y2: ly + (m.lines.length) * LINE_H + LABEL_PAD
+      };
+      if (!boxOverlaps(box)) {
+        placedBoxes.push(box);
+        const anchor = side === 'left' ? 'end' : 'start';
+        const tx = side === 'left' ? m.bx - 3 : m.bx + 3;
+        buoyMarkers += `<text x="${tx}" y="${m.by - 5}" text-anchor="${anchor}" fill="#8fa4b8" font-size="3.5" font-family="monospace">${m.name}</text>`;
+        m.lines.forEach((line, li) => {
+          buoyMarkers += `<text x="${tx}" y="${m.by + 1 + li * LINE_H}" text-anchor="${anchor}" fill="#ccd6e0" font-size="3.5" font-family="monospace" font-weight="600">${line}</text>`;
+        });
+        placed = true;
+        break;
+      }
+    }
   }
 
   // Latitude labels every 2 degrees
@@ -2622,7 +2686,7 @@ function renderBuoyMap(buoys, asilomarNearshore) {
     + `<span><span style="display:inline-block;width:6px;height:6px;border-radius:3px;background:#ffb300;vertical-align:middle;margin-right:3px"></span>Wind only</span>`
     + `<span><span style="display:inline-block;width:6px;height:6px;background:#00d4aa;transform:rotate(45deg);vertical-align:middle;margin-right:3px"></span>Nearshore</span>`
     + `<span><span style="display:inline-block;width:6px;height:6px;border-radius:50%;border:1.5px solid #ff6b6b;vertical-align:middle;margin-right:3px"></span>Your spot</span>`
-    + `<span style="color:#4a7a96">Tap buoy for details</span>`
+    + `<span style="color:#4a7a96">Tap for details</span>`
     + `</div>`;
 
   setHTML('buoy-map-body',
