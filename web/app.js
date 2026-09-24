@@ -2783,66 +2783,47 @@ function setupMapPan(svgEl, mapW, mapH) {
     popup.classList.add('visible');
   }
 
-  // Single-finger pan via pointer events
+  // Track active pointers for pan + pinch
+  let capturedId = null;
+  const activePointers = new Map(); // pointerId -> {x, y}
+
   svgEl.addEventListener('pointerdown', e => {
-    dragging = true;
-    didDrag = false;
-    const vb = getVB();
-    [startVBX, startVBY, vbW, vbH] = vb;
-    startX = e.clientX;
-    startY = e.clientY;
-    svgEl.setPointerCapture(e.pointerId);
-    svgEl.style.cursor = 'grabbing';
-    if (_mapWindAnim) { cancelAnimationFrame(_mapWindAnim.raf); _mapWindAnim = null; }
+    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (activePointers.size === 1) {
+      // Single finger - start pan
+      dragging = true;
+      didDrag = false;
+      const vb = getVB();
+      [startVBX, startVBY, vbW, vbH] = vb;
+      startX = e.clientX;
+      startY = e.clientY;
+      capturedId = e.pointerId;
+      svgEl.setPointerCapture(e.pointerId);
+      svgEl.style.cursor = 'grabbing';
+      if (_mapWindAnim) { cancelAnimationFrame(_mapWindAnim.raf); _mapWindAnim = null; }
+    } else if (activePointers.size === 2) {
+      // Second finger - switch to pinch zoom
+      dragging = false;
+      if (capturedId !== null) {
+        try { svgEl.releasePointerCapture(capturedId); } catch (_) {}
+        capturedId = null;
+      }
+      const pts = [...activePointers.values()];
+      lastPinchDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      if (_mapWindAnim) { cancelAnimationFrame(_mapWindAnim.raf); _mapWindAnim = null; }
+    }
   });
 
   svgEl.addEventListener('pointermove', e => {
-    if (!dragging) return;
+    if (!activePointers.has(e.pointerId)) return;
+    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     e.preventDefault();
-    const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
-    if (dist > TAP_THRESHOLD) didDrag = true;
-    const rect = svgEl.getBoundingClientRect();
-    const dx = (e.clientX - startX) * (vbW / rect.width);
-    const dy = (e.clientY - startY) * (vbH / rect.height);
-    clampVB(startVBX - dx, startVBY - dy, vbW, vbH);
-  });
 
-  svgEl.addEventListener('pointerup', e => {
-    if (!dragging) return;
-    dragging = false;
-    svgEl.style.cursor = 'grab';
-    if (!didDrag) {
-      showPopup(e.clientX, e.clientY);
-    } else {
-      dismissPopup();
-    }
-    startBuoyWindAnimation();
-  });
-
-  svgEl.addEventListener('pointercancel', () => {
-    dragging = false;
-    svgEl.style.cursor = 'grab';
-  });
-
-  // Pinch-to-zoom via touch events
-  svgEl.addEventListener('touchstart', e => {
-    if (e.touches.length === 2) {
-      lastPinchDist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      dragging = false; // cancel pan when second finger arrives
-      if (_mapWindAnim) { cancelAnimationFrame(_mapWindAnim.raf); _mapWindAnim = null; }
-    }
-  }, { passive: true });
-
-  svgEl.addEventListener('touchmove', e => {
-    if (e.touches.length === 2 && lastPinchDist !== null) {
-      e.preventDefault();
-      const dist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
+    if (activePointers.size === 2 && lastPinchDist !== null) {
+      // Pinch zoom
+      const pts = [...activePointers.values()];
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
       const scale = lastPinchDist / dist;
       lastPinchDist = dist;
 
@@ -2850,21 +2831,57 @@ function setupMapPan(svgEl, mapW, mapH) {
       const ar = vb[2] / vb[3];
       let newW = Math.max(MIN_VBW, Math.min(MAX_VBW, vb[2] * scale));
       let newH = newW / ar;
-
-      const cx = vb[0] + vb[2] / 2;
-      const cy = vb[1] + vb[3] / 2;
-      clampVB(cx - newW / 2, cy - newH / 2, newW, newH);
+      const pcx = vb[0] + vb[2] / 2;
+      const pcy = vb[1] + vb[3] / 2;
+      clampVB(pcx - newW / 2, pcy - newH / 2, newW, newH);
+      didDrag = true;
+    } else if (dragging && activePointers.size === 1) {
+      // Single-finger pan
+      const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
+      if (dist > TAP_THRESHOLD) didDrag = true;
+      const rect = svgEl.getBoundingClientRect();
+      const dx = (e.clientX - startX) * (vbW / rect.width);
+      const dy = (e.clientY - startY) * (vbH / rect.height);
+      clampVB(startVBX - dx, startVBY - dy, vbW, vbH);
     }
-  }, { passive: false });
+  });
 
-  svgEl.addEventListener('touchend', e => {
-    if (e.touches.length < 2) {
-      if (lastPinchDist !== null) {
-        lastPinchDist = null;
-        startBuoyWindAnimation();
+  function pointerEnd(e) {
+    activePointers.delete(e.pointerId);
+    if (capturedId === e.pointerId) capturedId = null;
+
+    if (activePointers.size === 0) {
+      const wasDrag = didDrag || lastPinchDist !== null;
+      dragging = false;
+      lastPinchDist = null;
+      svgEl.style.cursor = 'grab';
+      if (!wasDrag) {
+        showPopup(e.clientX, e.clientY);
+      } else {
+        dismissPopup();
       }
+      startBuoyWindAnimation();
+    } else if (activePointers.size === 1) {
+      // Went from 2 fingers to 1 - reset to pan from current position
+      lastPinchDist = null;
+      dragging = true;
+      const vb = getVB();
+      [startVBX, startVBY, vbW, vbH] = vb;
+      const remaining = [...activePointers.values()][0];
+      startX = remaining.x;
+      startY = remaining.y;
     }
-  }, { passive: true });
+  }
+
+  svgEl.addEventListener('pointerup', pointerEnd);
+  svgEl.addEventListener('pointercancel', e => {
+    activePointers.delete(e.pointerId);
+    if (activePointers.size === 0) {
+      dragging = false;
+      lastPinchDist = null;
+      svgEl.style.cursor = 'grab';
+    }
+  });
 
   // Scroll-wheel zoom (trackpad / mouse)
   svgEl.addEventListener('wheel', e => {
