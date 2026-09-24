@@ -2417,6 +2417,7 @@ const MAP_BUOYS = [
   { id: '46239', name: 'Pt Sur',          lat: 36.342, lon: -122.11 },
   { id: '46042', name: 'Monterey',        lat: 36.787, lon: -122.408 },
   { id: '46236', name: 'Mty Canyon',      lat: 36.759, lon: -121.95 },
+  { id: '46253', name: 'Santa Cruz',      lat: 36.927, lon: -122.029 },
   { id: '46012', name: 'Half Moon Bay',   lat: 37.356, lon: -122.881 },
   { id: '46026', name: 'San Francisco',   lat: 37.75,  lon: -122.838 },
   { id: '46237', name: 'SF Bar',          lat: 37.788, lon: -122.634 },
