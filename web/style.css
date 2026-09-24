@@ -152,7 +152,7 @@ main {
     grid-template-columns: 1fr 1fr;
     gap: 8px;
   }
-  .section-header, #card-quality, #card-swell, #card-wind-forecast, #card-7day, #card-24h, .card-row { grid-column: 1 / -1; }
+  .section-header, #card-quality, #card-swell, #card-wind-forecast, #card-7day, .card-row { grid-column: 1 / -1; }
 }
 
 @media (min-width: 1200px) {

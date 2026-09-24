@@ -1066,7 +1066,6 @@ async function loadSwell() {
     }
     EXTENDED_DATA.swell = allSwellPts;
     render7DayOutlook();
-    render24HourHeatmap();
 
     // Direction table — every 3 hours, next 24 hours
     const dirSamples = [];
@@ -1186,7 +1185,6 @@ async function loadWeather() {
     }
     EXTENDED_DATA.wind = allWindPts;
     render7DayOutlook();
-    render24HourHeatmap();
 
     QSTATE.windKts = d.hourly.wind_speed_10m[idx] ?? null;
     QSTATE.windDir = d.hourly.wind_direction_10m[idx] ?? null;
@@ -2364,113 +2362,6 @@ function render7DayOutlook() {
     <div class="buoy-source" style="margin-top:8px"><a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener" class="src-link">Open-Meteo Marine + Weather API ↗</a></div>`);
 }
 
-// ─── 24-Hour Heatmap ─────────────────────────────────────────────────────────
-function render24HourHeatmap() {
-  if (!EXTENDED_DATA.swell || !EXTENDED_DATA.wind) return;
-
-  const swPts = EXTENDED_DATA.swell;
-  const wnPts = EXTENDED_DATA.wind;
-  if (swPts.length < 2 || wnPts.length < 2) { setHTML('24h-body', errorHTML('Not enough data')); return; }
-
-  const now = new Date();
-
-  // Build hourly buckets for next 24 hours
-  const hours = [];
-  for (let i = 0; i < 24; i++) {
-    const t = new Date(now);
-    t.setMinutes(0, 0, 0);
-    t.setHours(t.getHours() + i);
-    hours.push({ t, swell: null, wind: null });
-  }
-
-  // Match data points to hour buckets
-  for (const p of swPts) {
-    const key = p.t.getFullYear() * 1e6 + (p.t.getMonth() + 1) * 1e4 + p.t.getDate() * 100 + p.t.getHours();
-    for (const h of hours) {
-      const hKey = h.t.getFullYear() * 1e6 + (h.t.getMonth() + 1) * 1e4 + h.t.getDate() * 100 + h.t.getHours();
-      if (key === hKey) { h.swell = p; break; }
-    }
-  }
-  for (const p of wnPts) {
-    const key = p.t.getFullYear() * 1e6 + (p.t.getMonth() + 1) * 1e4 + p.t.getDate() * 100 + p.t.getHours();
-    for (const h of hours) {
-      const hKey = h.t.getFullYear() * 1e6 + (h.t.getMonth() + 1) * 1e4 + h.t.getDate() * 100 + h.t.getHours();
-      if (key === hKey) { h.wind = p; break; }
-    }
-  }
-
-  // Color helpers
-  function swellColor(ht) {
-    if (ht >= 5) return '#00c853';
-    if (ht >= 3) return '#8bc34a';
-    if (ht >= 1.5) return '#ffeb3b';
-    if (ht >= 0.5) return '#ff9800';
-    return '#f44336';
-  }
-  function windColor(spd) {
-    if (spd < 8) return '#00c853';
-    if (spd < 14) return '#ffeb3b';
-    if (spd < 22) return '#ff9800';
-    return '#f44336';
-  }
-  const facing = BEACH_FACING();
-
-  const cols = hours.map((h, i) => {
-    const swHt = h.swell ? h.swell.swHt : null;
-    const wSpd = h.wind ? h.wind.spd : null;
-    const wDir = h.wind ? h.wind.dir : null;
-    const isNow = i === 0;
-    const highlight = isNow ? 'background:rgba(30,144,255,0.12);' : '';
-
-    // Quality for this hour
-    const hSwell = h.swell ? { ht: h.swell.swHt, per: h.swell.per, dir: h.swell.dir } : null;
-    const hq = hSwell && h.wind ? evaluateQuality(hSwell, h.wind.spd, h.wind.dir, facing) : null;
-    const qColor = hq ? QUALITY_COLORS[hq.label] : '#333';
-
-    // Swell cell
-    const swBg = swHt !== null ? swellColor(swHt) : '#333';
-    const swText = swHt !== null ? swHt.toFixed(1) : '-';
-
-    // Wind cell
-    const wnBg = wSpd !== null ? windColor(wSpd) : '#333';
-    const wnText = wSpd !== null ? Math.round(wSpd) : '-';
-    const arrow = wDir !== null
-      ? `<span style="display:inline-block;transform:rotate(${wDir + 180}deg);font-size:10px;line-height:1;color:var(--text-secondary)">↓</span>`
-      : '-';
-
-    // Day separator marker
-    const dayBorder = h.t.getHours() === 0 ? 'border-left:2px solid var(--accent-blue);' : '';
-
-    return `<div style="flex:0 0 36px;text-align:center;padding:4px 0;${highlight}${dayBorder}border-right:1px solid var(--border);font-family:monospace">
-      <div style="height:5px;border-radius:2px;background:${qColor};opacity:0.9;margin:0 3px 2px"></div>
-      <div style="font-size:8px;color:${isNow ? 'var(--accent-teal)' : 'var(--text-muted)'};font-weight:${isNow ? '700' : '400'};margin-bottom:2px">${isNow ? 'NOW' : fmtHourShort(h.t)}</div>
-      <div style="font-size:10px;font-weight:700;color:${swBg};margin-bottom:2px">${swText}</div>
-      <div style="margin-bottom:1px">${arrow}</div>
-      <div style="font-size:9px;font-weight:600;color:${wnBg}">${wnText}</div>
-      <div style="display:flex;flex-direction:column;gap:1px;margin-top:3px;padding:0 3px">
-        <div style="height:5px;border-radius:2px;background:${swBg};opacity:0.8"></div>
-        <div style="height:5px;border-radius:2px;background:${wnBg};opacity:0.8"></div>
-      </div>
-    </div>`;
-  }).join('');
-
-  const legend = `<div style="display:flex;justify-content:space-between;margin-top:4px;font-size:9px;color:var(--text-muted);font-family:monospace">
-    <div style="display:flex;align-items:center;gap:6px">
-      <span>Quality (top) / Swell ft / Wind kts</span>
-    </div>
-    <div style="display:flex;align-items:center;gap:3px">
-      <span style="width:5px;height:5px;border-radius:2px;background:#9b6dff;display:inline-block" title="EPIC"></span>
-      <span style="width:5px;height:5px;border-radius:2px;background:#00c853;display:inline-block" title="GOOD"></span>
-      <span style="width:5px;height:5px;border-radius:2px;background:#ffb300;display:inline-block" title="FAIR"></span>
-      <span style="width:5px;height:5px;border-radius:2px;background:#ff5252;display:inline-block" title="POOR"></span>
-    </div>
-  </div>`;
-
-  setHTML('24h-body', `
-    <div style="display:flex;overflow-x:auto;border:1px solid var(--border);border-radius:8px;-webkit-overflow-scrolling:touch;scrollbar-width:none">${cols}</div>
-    ${legend}`);
-}
-
 // ─── Live Buoy Map ───────────────────────────────────────────────────────────
 const MAP_BUOYS = [
   // SoCal
@@ -3220,7 +3111,6 @@ async function refreshAll() {
   EXTENDED_DATA.swell = null;
   EXTENDED_DATA.wind  = null;
   setHTML('7day-body',          loadingHTML());
-  setHTML('24h-body',           loadingHTML());
   setHTML('buoy-body',          loadingHTML());
   setHTML('wind-body',          loadingHTML());
   const _tm = document.getElementById('tide-mini'); if (_tm) _tm.innerHTML = '';
