@@ -593,6 +593,27 @@ main {
   height: 380px;
   overflow: hidden;
   border-radius: 6px;
+  transition: none;
+}
+.buoy-map-wrap.fullscreen {
+  position: fixed;
+  inset: 0;
+  height: 100%;
+  width: 100%;
+  z-index: 1000;
+  border-radius: 0;
+  background: #0d1f35;
+}
+.buoy-map-fullscreen-hint {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: rgba(255,255,255,0.4);
+  font-family: monospace;
+  pointer-events: none;
+  z-index: 11;
 }
 .buoy-map-wrap svg { display: block; width: 100%; height: 100%; }
 #buoy-wind-canvas {
