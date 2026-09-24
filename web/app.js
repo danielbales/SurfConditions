@@ -1494,10 +1494,9 @@ async function loadTides() {
       <div class="buoy-source" style="margin-top:6px"><a href="https://tidesandcurrents.noaa.gov/waterlevels.html?id=${NOAA_STATION()}" target="_blank" rel="noopener" class="src-link">NOAA Tides & Currents · ${tideSource} ↗</a></div>
     `);
 
-    // ── Tide graph inside wind card ────────────────────────────────────────
+    // ── Interactive tide graph inside wind card ─────────────────────────────
     const miniEl = document.getElementById('tide-mini');
     if (miniEl) {
-      // Build a compact 24h tide chart (6h back, 18h ahead)
       const mW = 280, mH = 70, mPL = 22, mPR = 4, mPT = 10, mPB = 14;
       const mCW = mW - mPL - mPR, mCH = mH - mPT - mPB;
       const mStart = new Date(now.getTime() - 6 * 3600000);
@@ -1525,7 +1524,7 @@ async function loadTides() {
         const mNowX = mtx(now).toFixed(1);
         const mNowY = mty(nowV).toFixed(1);
 
-        // Hi/lo markers within the 24h window
+        // Hi/lo markers
         const mEvents = events.filter(e => e.t >= mStart && e.t <= mEnd);
         const mMarkers = mEvents.map(e => {
           const ex = mtx(e.t).toFixed(1);
@@ -1547,12 +1546,7 @@ async function loadTides() {
           mXLabels += `<text x="${x}" y="${(mH - 3).toFixed(1)}" text-anchor="middle" font-size="6" fill="#4a7a96">${lbl}</text>`;
         }
 
-        miniEl.innerHTML = `
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">
-            <span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">24h Tides</span>
-            <span style="font-size:11px;color:#1e90ff;font-weight:600">${nowV.toFixed(1)}ft <span style="font-weight:400;color:var(--text-muted)">${trend}</span></span>
-          </div>
-          <svg viewBox="0 0 ${mW} ${mH}" width="100%" style="display:block;overflow:visible">
+        const svgChart = `<svg viewBox="0 0 ${mW} ${mH}" width="100%" style="display:block;overflow:visible">
             <defs><linearGradient id="tideFillMini" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stop-color="#1e90ff" stop-opacity="0.2"/>
               <stop offset="100%" stop-color="#1e90ff" stop-opacity="0.02"/>
@@ -1564,11 +1558,84 @@ async function loadTides() {
             ${mMarkers}
             ${mXLabels}
           </svg>`;
+
+        miniEl.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">
+            <span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">24h Tides</span>
+            <span style="font-size:11px;color:#1e90ff;font-weight:600">${nowV.toFixed(1)}ft <span style="font-weight:400;color:var(--text-muted)">${trend}</span></span>
+          </div>
+          <div id="tide-mini-chart" class="wind-chart-container" style="position:relative">${svgChart}<div id="tide-mini-crosshair" class="wind-crosshair"></div><div id="tide-mini-tip" class="wind-chart-tip"></div></div>`;
+
+        // Setup interactive scrubbing
+        setupTideMiniInteraction(mPts, mEvents, mW, mPL, mPR);
       }
     }
   } catch (e) {
     setHTML('tides-body', errorHTML('Tide data unavailable: ' + e.message));
   }
+}
+
+function setupTideMiniInteraction(pts, events, SVG_W, PL, PR) {
+  const container = document.getElementById('tide-mini-chart');
+  const tip       = document.getElementById('tide-mini-tip');
+  const crosshair = document.getElementById('tide-mini-crosshair');
+  if (!container || !tip) return;
+
+  const tStart = pts[0].t.getTime(), tEnd = pts[pts.length - 1].t.getTime(), tRange = tEnd - tStart;
+
+  function idxFromX(clientX) {
+    const rect = container.getBoundingClientRect();
+    const fracPL = PL / SVG_W, fracPR = PR / SVG_W;
+    const frac = Math.max(0, Math.min(1,
+      ((clientX - rect.left) / rect.width - fracPL) / (1 - fracPL - fracPR)));
+    const tgt = tStart + frac * tRange;
+    let best = 0, bestD = Infinity;
+    for (let i = 0; i < pts.length; i++) { const d = Math.abs(pts[i].t.getTime() - tgt); if (d < bestD) { bestD = d; best = i; } }
+    return best;
+  }
+
+  function show(clientX) {
+    const i = idxFromX(clientX), p = pts[i];
+    const rect = container.getBoundingClientRect();
+    const fracPL = PL / SVG_W, fracPR = PR / SVG_W;
+    const x = ((p.t.getTime() - tStart) / tRange * (1 - fracPL - fracPR) + fracPL) * rect.width;
+    const tipW = tip.offsetWidth || 120;
+    tip.style.left = (x > rect.width / 2 ? Math.max(0, x - tipW - 8) : x + 10) + 'px';
+
+    // Check if this time is near a hi/lo event
+    let eventLabel = '';
+    for (const ev of events) {
+      if (Math.abs(ev.t.getTime() - p.t.getTime()) < 1800000) {
+        eventLabel = `<div style="font-size:10px;color:${ev.type === 'H' ? '#9b6dff' : '#1e90ff'};font-family:monospace;font-weight:700">${ev.type === 'H' ? 'High' : 'Low'} Tide</div>`;
+        break;
+      }
+    }
+
+    // Determine trend at this point
+    let trendAt = '';
+    if (i > 0 && i < pts.length - 1) {
+      trendAt = pts[i + 1].v > pts[i].v ? ' rising' : pts[i + 1].v < pts[i].v ? ' falling' : '';
+    }
+
+    tip.innerHTML = `
+      <div style="font-size:10px;color:#00d4aa;font-family:monospace;margin-bottom:3px">${fmtTime(p.t)}</div>
+      ${eventLabel}
+      <div style="font-size:12px;color:#1e90ff;font-family:monospace"><b>${p.v.toFixed(2)} ft</b>${trendAt ? ` <span style="color:var(--text-muted);font-size:10px">${trendAt}</span>` : ''}</div>`;
+    tip.style.display = 'block';
+
+    if (crosshair) { crosshair.style.left = x + 'px'; crosshair.style.display = 'block'; }
+  }
+
+  function hide() {
+    tip.style.display = 'none';
+    if (crosshair) crosshair.style.display = 'none';
+  }
+
+  container.addEventListener('touchstart', e => { e.preventDefault(); show(e.touches[0].clientX); }, { passive: false });
+  container.addEventListener('touchmove',  e => { e.preventDefault(); show(e.touches[0].clientX); }, { passive: false });
+  container.addEventListener('touchend', hide);
+  container.addEventListener('mousemove', e => show(e.clientX));
+  container.addEventListener('mouseleave', hide);
 }
 
 // ─── 5. NWS Marine Forecast ───────────────────────────────────────────────────
