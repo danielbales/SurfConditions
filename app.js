@@ -1568,6 +1568,42 @@ async function loadTides() {
         setupTideMiniInteraction(mPts, mEvents, mW, mPL, mPR);
       }
     }
+
+    // ── Daily tide schedule next to wind ──────────────────────────────────
+    const dailyEl = document.getElementById('tide-daily');
+    if (dailyEl) {
+      const todayEvents = events.filter(e => {
+        return e.t.getFullYear() === today.getFullYear()
+          && e.t.getMonth() === today.getMonth()
+          && e.t.getDate() === today.getDate();
+      });
+      if (todayEvents.length > 0) {
+        // Mini bar chart - each event as a bar with height proportional to level
+        const maxLvl = Math.max(...todayEvents.map(e => e.v));
+        const minLvl = Math.min(...todayEvents.map(e => e.v));
+        const range = Math.max(maxLvl - minLvl, 0.5);
+        const barH = 36; // max bar height px
+
+        const bars = todayEvents.map(e => {
+          const isHigh = e.type === 'H';
+          const color = isHigh ? '#9b6dff' : '#1e90ff';
+          const h = Math.max(6, ((e.v - minLvl) / range) * barH);
+          const isPast = e.t < now;
+          const opacity = isPast ? '0.5' : '1';
+          const timeStr = fmtTime(e.t).replace(':00', '');
+          return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;opacity:${opacity}">
+            <span style="font-size:9px;color:${color};font-weight:700">${e.v.toFixed(1)}</span>
+            <div style="width:14px;height:${h.toFixed(0)}px;background:${color};border-radius:3px 3px 0 0;opacity:0.8"></div>
+            <span style="font-size:8px;color:var(--text-muted)">${isHigh ? 'H' : 'L'}</span>
+            <span style="font-size:8px;color:var(--text-muted)">${timeStr}</span>
+          </div>`;
+        }).join('');
+
+        dailyEl.innerHTML = `
+          <div style="font-size:8px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;text-align:center">Today</div>
+          <div style="display:flex;gap:8px;align-items:flex-end;justify-content:center">${bars}</div>`;
+      }
+    }
   } catch (e) {
     setHTML('tides-body', errorHTML('Tide data unavailable: ' + e.message));
   }
@@ -3114,6 +3150,7 @@ async function refreshAll() {
   setHTML('buoy-body',          loadingHTML());
   setHTML('wind-body',          loadingHTML());
   const _tm = document.getElementById('tide-mini'); if (_tm) _tm.innerHTML = '';
+  const _td = document.getElementById('tide-daily'); if (_td) _td.innerHTML = '';
   setHTML('buoy-map-body',      loadingHTML());
   setHTML('swell-body',         loadingHTML());
   setHTML('wind-forecast-body', loadingHTML());
