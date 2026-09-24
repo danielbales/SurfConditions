@@ -2743,18 +2743,32 @@ function setupMapPan(svgEl, mapW, mapH) {
   function isFullscreen() { return wrap.classList.contains('fullscreen'); }
 
   function toggleFullscreen(goFull) {
+    const vb = getVB();
+    // Preserve the center point across the resize
+    const cx = vb[0] + vb[2] / 2;
+    const cy = vb[1] + vb[3] / 2;
+
     if (goFull) {
       wrap.classList.add('fullscreen');
       const hint = document.getElementById('buoy-fs-hint');
       if (hint) hint.textContent = 'Double-tap to minimize';
-      // Restart animation to fit new size
-      startBuoyWindAnimation();
     } else {
       wrap.classList.remove('fullscreen');
       const hint = document.getElementById('buoy-fs-hint');
       if (hint) hint.textContent = '';
-      startBuoyWindAnimation();
     }
+
+    // Recalculate viewBox to match new container aspect ratio
+    requestAnimationFrame(() => {
+      const rect = wrap.getBoundingClientRect();
+      const newAR = rect.width / rect.height;
+      const newH = vb[3]; // keep same vertical span
+      const newW = newH * newAR;
+      const nx = Math.max(0, Math.min(mapW - newW, cx - newW / 2));
+      const ny = Math.max(0, Math.min(mapH - newH, cy - newH / 2));
+      svgEl.setAttribute('viewBox', `${nx.toFixed(1)} ${ny.toFixed(1)} ${newW.toFixed(1)} ${newH.toFixed(1)}`);
+      startBuoyWindAnimation();
+    });
   }
 
   function dismissPopup() {
