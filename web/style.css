@@ -587,6 +587,18 @@ main {
   font-family: monospace;
 }
 
+/* Daily tide schedule (inside wind card, next to wind) */
+#tide-daily:empty { display: none; }
+#tide-daily {
+  padding: 10px;
+  border-left: 1px solid var(--border);
+  font-family: monospace;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 105px;
+}
+
 /* Buoy map - pannable West Coast view */
 .buoy-map-wrap {
   position: relative;
