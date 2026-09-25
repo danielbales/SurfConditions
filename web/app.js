@@ -1578,30 +1578,19 @@ async function loadTides() {
           && e.t.getDate() === today.getDate();
       });
       if (todayEvents.length > 0) {
-        // Mini bar chart - each event as a bar with height proportional to level
-        const maxLvl = Math.max(...todayEvents.map(e => e.v));
-        const minLvl = Math.min(...todayEvents.map(e => e.v));
-        const range = Math.max(maxLvl - minLvl, 0.5);
-        const barH = 36; // max bar height px
-
-        const bars = todayEvents.map(e => {
+        const rows = todayEvents.map(e => {
           const isHigh = e.type === 'H';
-          const color = isHigh ? '#9b6dff' : '#1e90ff';
-          const h = Math.max(6, ((e.v - minLvl) / range) * barH);
           const isPast = e.t < now;
-          const opacity = isPast ? '0.5' : '1';
+          const opacity = isPast ? '0.45' : '1';
           const timeStr = fmtTime(e.t).replace(':00', '');
-          return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;opacity:${opacity}">
-            <span style="font-size:9px;color:${color};font-weight:700">${e.v.toFixed(1)}</span>
-            <div style="width:14px;height:${h.toFixed(0)}px;background:${color};border-radius:3px 3px 0 0;opacity:0.8"></div>
-            <span style="font-size:8px;color:var(--text-muted)">${isHigh ? 'H' : 'L'}</span>
-            <span style="font-size:8px;color:var(--text-muted)">${timeStr}</span>
+          return `<div style="display:flex;align-items:baseline;gap:4px;opacity:${opacity}">
+            <span style="font-size:11px;font-weight:700;color:${isHigh ? '#9b6dff' : '#1e90ff'};width:11px">${isHigh ? 'H' : 'L'}</span>
+            <span style="font-size:11px;color:var(--text-muted)">${timeStr}</span>
+            <span style="font-size:10px;color:var(--text-muted)">${e.v.toFixed(1)}ft</span>
           </div>`;
         }).join('');
 
-        dailyEl.innerHTML = `
-          <div style="font-size:8px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;text-align:center">Today</div>
-          <div style="display:flex;gap:8px;align-items:flex-end;justify-content:center">${bars}</div>`;
+        dailyEl.innerHTML = `<div style="display:flex;flex-direction:column;gap:3px">${rows}</div>`;
       }
     }
   } catch (e) {
