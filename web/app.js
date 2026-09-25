@@ -2721,8 +2721,17 @@ function setupMapPan(svgEl, mapW, mapH) {
   function getVB() { return svgEl.getAttribute('viewBox').split(' ').map(Number); }
 
   function clampVB(x, y, w, h) {
-    x = Math.max(0, Math.min(mapW - w, x));
-    y = Math.max(0, Math.min(mapH - h, y));
+    // Allow panning when zoomed in (w < mapW) and when fullscreen stretches viewBox
+    if (w < mapW) {
+      x = Math.max(0, Math.min(mapW - w, x));
+    } else {
+      x = Math.min(0, Math.max(mapW - w, x));
+    }
+    if (h < mapH) {
+      y = Math.max(0, Math.min(mapH - h, y));
+    } else {
+      y = Math.min(0, Math.max(mapH - h, y));
+    }
     svgEl.setAttribute('viewBox', `${x.toFixed(1)} ${y.toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)}`);
   }
 
