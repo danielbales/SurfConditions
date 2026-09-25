@@ -1308,9 +1308,12 @@ function renderWind(speedKts, gustKts, dir, isObserved) {
   // Update wind badge
   setBadge('wind-badge', desc.toUpperCase(), wc, wc + '26');
 
+  const arrowDeg = (dir != null) ? dir + 180 : null;
+  const arrow = arrowDeg != null ? `<span style="display:inline-block;transform:rotate(${arrowDeg}deg);color:${wc};font-size:14px;line-height:1;vertical-align:middle">↑</span>` : '';
+
   setHTML('wind-body', `
     <div style="font-family:monospace;font-size:12px;line-height:1.6;color:var(--text-secondary)">
-      <div><span style="color:${wc};font-weight:700;font-size:14px">${speedKts?.toFixed(0) ?? '—'}kts</span> ${dirStr} <span style="color:var(--text-muted)">gusts ${gustKts?.toFixed(0) ?? '—'}</span></div>
+      <div><span style="color:${wc};font-weight:700;font-size:14px">${speedKts?.toFixed(0) ?? '—'}kts</span> ${dirStr} ${arrow} <span style="color:var(--text-muted)">gusts ${gustKts?.toFixed(0) ?? '—'}</span></div>
       <div style="font-size:10px;color:var(--text-muted)">${desc} · ${sourceTag}</div>
     </div>
   `);
