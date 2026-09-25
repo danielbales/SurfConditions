@@ -608,15 +608,10 @@ async function loadBuoy() {
     const perLabel = perTag ? `<div style="font-size:9px;color:${perColor};font-family:monospace;margin-top:2px">${perTag.label}</div>` : '';
 
     setHTML('buoy-body', `
-      <div id="buoy-quality" style="margin-bottom:6px"></div>
-      <div class="stat-row">
-        <span class="stat-value" style="color:#00d4aa">${wvhtFt}</span>
-        ${wvhtFt !== '—' ? '<span class="stat-unit">ft</span>' : ''}
-      </div>
-      <div class="stat-label">${sourceTag}</div>
-      <div style="margin-top:6px;font-size:11px;font-family:monospace;color:var(--text-secondary)">
-        <div><span style="color:${perColor};font-weight:600">${dpd}s</span> period${perLabel}</div>
-        <div style="margin-top:3px">${dirStr} <span style="color:var(--text-muted)">${mwd !== null ? mwd + '°' : ''}</span></div>
+      <div id="buoy-quality" style="margin-bottom:4px"></div>
+      <div style="font-family:monospace;font-size:12px;line-height:1.6;color:var(--text-secondary)">
+        <div><span style="color:#00d4aa;font-weight:700;font-size:16px">${wvhtFt}ft</span> <span style="color:${perColor};font-weight:600">${dpd}s</span>${perLabel} <span style="color:var(--text-muted)">${dirStr}</span></div>
+        <div style="font-size:10px;color:var(--text-muted)">${sourceTag}</div>
       </div>
     `);
     renderQuality();
@@ -1314,14 +1309,9 @@ function renderWind(speedKts, gustKts, dir, isObserved) {
   setBadge('wind-badge', desc.toUpperCase(), wc, wc + '26');
 
   setHTML('wind-body', `
-    <div class="stat-row">
-      <span class="stat-value" style="color:${wc}">${speedKts?.toFixed(0) ?? '—'}</span>
-      <span class="stat-unit">kts</span>
-    </div>
-    <div class="stat-label">${desc} · ${sourceTag}</div>
-    <div style="margin-top:6px;font-size:11px;font-family:monospace;color:var(--text-secondary)">
-      <div>from ${dirStr} <span style="color:var(--text-muted)">${dir}°</span></div>
-      <div style="margin-top:3px">gusts ${gustKts?.toFixed(0) ?? '—'} kts</div>
+    <div style="font-family:monospace;font-size:12px;line-height:1.6;color:var(--text-secondary)">
+      <div><span style="color:${wc};font-weight:700;font-size:14px">${speedKts?.toFixed(0) ?? '—'}kts</span> ${dirStr} <span style="color:var(--text-muted)">gusts ${gustKts?.toFixed(0) ?? '—'}</span></div>
+      <div style="font-size:10px;color:var(--text-muted)">${desc} · ${sourceTag}</div>
     </div>
   `);
 }
