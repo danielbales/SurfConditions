@@ -460,7 +460,131 @@ function toggleSection(headerEl) {
 
 function setBadge(id, label, color, bg) {
   const el = document.getElementById(id);
-  if (el) { el.textContent = label; el.style.color = color; el.style.background = bg; }
+  if (!el) return;
+  el.textContent = label;
+  el.style.color = color;
+  el.style.background = bg;
+  if (label && label !== '--') el.setAttribute('aria-label', label);
+}
+
+// Horizontal finger motion scrubs a chart. Vertical motion scrolls the page.
+function chartGesture(dx, dy) {
+  const adx = Math.abs(dx), ady = Math.abs(dy);
+  if (adx < 10 && ady < 10) return null;
+  return adx > ady ? 'scrub' : 'scroll';
+}
+
+function bindChartScrub(el, onScrub, onEnd) {
+  let startX = 0, startY = 0, mode = null;
+  el.addEventListener('touchstart', e => {
+    if (e.touches.length !== 1) return;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    mode = null;
+  }, { passive: true });
+  el.addEventListener('touchmove', e => {
+    if (e.touches.length !== 1) return;
+    const x = e.touches[0].clientX;
+    const y = e.touches[0].clientY;
+    if (!mode) {
+      mode = chartGesture(x - startX, y - startY);
+      if (!mode) return;
+    }
+    if (mode === 'scrub') {
+      if (e.cancelable) e.preventDefault();
+      onScrub(x);
+    }
+  }, { passive: false });
+  const finish = () => {
+    if (mode === 'scrub' && onEnd) onEnd();
+    mode = null;
+  };
+  el.addEventListener('touchend', finish);
+  el.addEventListener('touchcancel', finish);
+}
+
+const LAST_READING_KEY = 'surf_last_reading_v1';
+
+function getLastReading(spotId) {
+  try {
+    const all = JSON.parse(localStorage.getItem(LAST_READING_KEY) || '{}');
+    return all[spotId] || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function rememberReading(spotId, patch) {
+  if (!spotId) return;
+  let all = {};
+  try { all = JSON.parse(localStorage.getItem(LAST_READING_KEY) || '{}'); } catch (e) {}
+  all[spotId] = { ...(all[spotId] || {}), ...patch, savedAt: Date.now() };
+  try { localStorage.setItem(LAST_READING_KEY, JSON.stringify(all)); } catch (e) {}
+}
+
+function captureConditions(spotId) {
+  const buoy = document.getElementById('buoy-body');
+  const wind = document.getElementById('wind-body');
+  if (!buoy || !wind) return;
+  if (buoy.querySelector('.error-msg') || buoy.querySelector('.loading')) return;
+  if (wind.querySelector('.error-msg') || wind.querySelector('.loading')) return;
+  const badge = document.getElementById('buoy-badge');
+  const temp = document.getElementById('water-temp-body');
+  const tempBadge = document.getElementById('water-temp-badge');
+  const tides = document.getElementById('tides-body');
+  const tideBadge = document.getElementById('tide-badge');
+  const tideMini = document.getElementById('tide-mini');
+  const tideDaily = document.getElementById('tide-daily');
+  const best = document.getElementById('best-window');
+  const patch = {
+    buoyHTML: buoy.innerHTML,
+    windHTML: wind.innerHTML,
+    buoyBadge: badge ? { text: badge.textContent, color: badge.style.color, bg: badge.style.background } : null,
+  };
+  if (temp && !temp.querySelector('.error-msg') && !temp.querySelector('.loading') && temp.textContent.trim()) {
+    patch.tempHTML = temp.innerHTML;
+    patch.tempBadge = tempBadge ? tempBadge.textContent : '';
+  }
+  if (tides && !tides.querySelector('.error-msg') && !tides.querySelector('.loading') && tides.textContent.trim()) {
+    patch.tideHTML = tides.innerHTML;
+    patch.tideBadge = tideBadge ? { text: tideBadge.textContent, color: tideBadge.style.color, bg: tideBadge.style.background } : null;
+    patch.tideMiniHTML = tideMini ? tideMini.innerHTML : '';
+    patch.tideDailyHTML = tideDaily ? tideDaily.innerHTML : '';
+  }
+  if (best && !best.hidden && best.innerHTML) patch.bestHTML = best.innerHTML;
+  rememberReading(spotId, patch);
+}
+
+function paintLastReading(saved) {
+  if (!saved) return false;
+  if (saved.buoyHTML) setHTML('buoy-body', saved.buoyHTML);
+  if (saved.windHTML) setHTML('wind-body', saved.windHTML);
+  if (saved.buoyBadge) setBadge('buoy-badge', saved.buoyBadge.text, saved.buoyBadge.color, saved.buoyBadge.bg);
+  if (saved.tempHTML) {
+    setHTML('water-temp-body', saved.tempHTML);
+    const el = document.getElementById('water-temp-badge');
+    if (el && saved.tempBadge) el.textContent = saved.tempBadge;
+  }
+  if (saved.tideHTML) setHTML('tides-body', saved.tideHTML);
+  if (saved.tideBadge) setBadge('tide-badge', saved.tideBadge.text, saved.tideBadge.color, saved.tideBadge.bg);
+  if (saved.tideMiniHTML != null) {
+    const el = document.getElementById('tide-mini');
+    if (el) el.innerHTML = saved.tideMiniHTML;
+  }
+  if (saved.tideDailyHTML != null) {
+    const el = document.getElementById('tide-daily');
+    if (el) el.innerHTML = saved.tideDailyHTML;
+  }
+  const best = document.getElementById('best-window');
+  if (best) {
+    if (saved.bestHTML) { best.hidden = false; best.innerHTML = saved.bestHTML; }
+    else { best.hidden = true; best.innerHTML = ''; }
+  }
+  return true;
+}
+
+function bestWindowKicker(start, now) {
+  return start.toDateString() === now.toDateString() ? 'Best window today' : 'Next best window';
 }
 
 function loadingHTML() {
@@ -621,8 +745,8 @@ async function loadBuoy(gen, spotId) {
     setHTML('buoy-body', `
       <div id="buoy-quality" style="margin-bottom:4px"></div>
       <div style="font-family:monospace;font-size:12px;line-height:1.6;color:var(--text-secondary)">
-        <div><span style="color:#00d4aa;font-weight:700;font-size:16px">${wvhtFt}ft</span> <span style="color:${perColor};font-weight:600">${dpd}s</span>${perLabel} <span style="color:var(--text-muted)">${dirStr}</span></div>
-        <div style="font-size:10px;color:var(--text-muted)">${stationLine}</div>
+        <div><span class="cond-hero" style="color:#00d4aa">${wvhtFt}<span class="cond-unit">ft</span></span> <span style="color:${perColor};font-weight:700;font-size:18px">${dpd}s</span>${perLabel} <span style="color:var(--text-secondary);font-weight:700">${dirStr}</span></div>
+        <div class="station-line">${stationLine}</div>
       </div>
     `);
     renderWind(wind?.kts, wind?.gust, wind?.dir, windObserved);
@@ -643,10 +767,15 @@ async function loadBuoy(gen, spotId) {
     ` : errorHTML('Water temperature unavailable'));
     const tempBadge = document.getElementById('water-temp-badge');
     if (tempBadge) tempBadge.textContent = sstF !== '—' ? `${sstF}°F` : '--';
+    captureConditions(spotId);
+    return true;
   } catch (e) {
-    if (!stillCurrent(gen, spotId)) return;
-    setHTML('buoy-body', errorHTML('Wave data unavailable: ' + e.message));
-    setHTML('water-temp-body', errorHTML('Water temperature unavailable'));
+    if (!stillCurrent(gen, spotId)) return false;
+    if (!paintLastReading(getLastReading(spotId))) {
+      setHTML('buoy-body', errorHTML('Wave data unavailable: ' + e.message));
+      setHTML('water-temp-body', errorHTML('Water temperature unavailable'));
+    }
+    return false;
   }
 }
 
@@ -806,9 +935,7 @@ function setupSwellChart(pts) {
 
   drawSwellChart(canvas, pts, null);
 
-  canvas.addEventListener('touchstart', e => { e.preventDefault(); showTip(e.touches[0].clientX); }, { passive: false });
-  canvas.addEventListener('touchmove',  e => { e.preventDefault(); showTip(e.touches[0].clientX); }, { passive: false });
-  canvas.addEventListener('touchend',   hideTip);
+  bindChartScrub(canvas, showTip, hideTip);
   canvas.addEventListener('mousemove',  e => showTip(e.clientX));
   canvas.addEventListener('mouseleave', hideTip);
 }
@@ -944,19 +1071,14 @@ function renderQuality() {
 
   slot.innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-      <span style="font-size:18px;font-weight:bold;font-family:monospace;color:${color}">${q.label}</span>
+      <span style="font-size:26px;font-weight:800;font-family:monospace;color:${color}">${q.label}</span>
       <span style="font-size:11px;color:var(--text-secondary);font-family:monospace">${q.score.toFixed(1)}/10</span>
     </div>
     <div style="height:4px;border-radius:2px;background:rgba(155,155,155,0.15);overflow:hidden">
       <div style="width:${pct}%;height:100%;border-radius:2px;background:${color}"></div>
     </div>`;
 
-  const badge = document.getElementById('buoy-badge');
-  if (badge) {
-    badge.textContent = q.label;
-    badge.style.color = color;
-    badge.style.background = color + '26';
-  }
+  setBadge('buoy-badge', q.label, color, color + '26');
 }
 
 // ─── 2. Open-Meteo Marine (Swell Forecast) ────────────────────────────────────
@@ -1150,7 +1272,7 @@ async function loadSwell(gen, spotId) {
       <div class="divider"></div>
       ${legend}
       <div style="position:relative;margin-bottom:6px">
-        <canvas id="swell-chart-canvas" height="80" style="width:100%;height:80px;display:block;touch-action:none;cursor:crosshair"></canvas>
+        <canvas id="swell-chart-canvas" height="80" style="width:100%;height:80px;display:block;touch-action:pan-y;cursor:crosshair"></canvas>
         <div id="swell-chart-tip" style="display:none;position:absolute;top:6px;left:0;background:rgba(10,22,40,0.92);border:1px solid rgba(30,144,255,0.4);border-radius:6px;padding:6px 9px;pointer-events:none;min-width:130px;max-width:160px"></div>
       </div>
       ${dirTable}
@@ -1322,8 +1444,8 @@ function renderWind(speedKts, gustKts, dir, isObserved) {
 
   setHTML('wind-body', `
     <div style="font-family:monospace;font-size:12px;line-height:1.6;color:var(--text-secondary)">
-      <div><span style="color:${wc};font-weight:700;font-size:14px">${speedKts?.toFixed(0) ?? '—'}kts</span> ${dirStr} ${arrow} <span style="color:var(--text-muted)">gusts ${gustKts?.toFixed(0) ?? '—'}</span></div>
-      <div style="font-size:10px;color:var(--text-muted)">${desc} · ${sourceTag}</div>
+      <div><span class="cond-wind" style="color:${wc}">${speedKts?.toFixed(0) ?? '—'}<span class="cond-unit">kts</span></span> ${dirStr} ${arrow} <span style="color:var(--text-secondary)">gusts ${gustKts?.toFixed(0) ?? '—'}</span></div>
+      <div class="station-line">${desc} · ${sourceTag}</div>
     </div>
   `);
 }
@@ -1518,14 +1640,14 @@ async function loadTides(gen, spotId) {
       trendWord === 'FALLING' ? '#1e90ff' : '#9b6dff',
       trendWord === 'FALLING' ? 'rgba(30,144,255,0.15)' : 'rgba(155,109,255,0.15)');
     setHTML('tides-body', `
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-        <span style="font-size:18px;font-weight:700;color:#1e90ff">${nowV.toFixed(2)}<span style="font-size:11px;color:var(--text-muted)"> ft ${tideSource.toLowerCase()}</span></span>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:8px;margin-bottom:4px">
+        <span class="cond-hero" style="color:#1e90ff">${nowV.toFixed(2)}<span class="cond-unit">ft ${tideSource.toLowerCase()}</span></span>
         <div style="display:flex;align-items:center;gap:6px">
-          <span style="font-size:11px;color:var(--text-secondary)">${trend}</span>
+          <span style="font-size:14px;font-weight:700;color:var(--text-secondary)">${trend}</span>
           <button class="tide-toggle${toggleActive}" onclick="toggleTideRange()">${toggleLabel}</button>
         </div>
       </div>
-      <div style="font-size:10px;color:var(--text-muted);margin:2px 0 4px">${tideStationLine}</div>
+      <div class="station-line">${tideStationLine}</div>
       ${svg}
       <div class="buoy-source" style="margin-top:6px"><a href="https://tidesandcurrents.noaa.gov/waterlevels.html?id=${encodeURIComponent(NOAA_STATION())}" target="_blank" rel="noopener" class="src-link">${tideStationLine} · ${tideSource} ↗</a></div>
     `);
@@ -1631,10 +1753,17 @@ async function loadTides(gen, spotId) {
         dailyEl.innerHTML = `<div style="display:flex;flex-direction:column;gap:3px">${rows}</div>`;
       }
     }
+    captureConditions(spotId);
   } catch (e) {
     if (!stillCurrent(gen, spotId) || tideReq !== _tideReq) return;
-    setBadge('tide-badge', '--', '#7eb8d4', 'rgba(126,184,212,0.15)');
-    setHTML('tides-body', errorHTML('Tide data unavailable: ' + e.message));
+    const saved = getLastReading(spotId);
+    if (saved?.tideHTML) {
+      setHTML('tides-body', saved.tideHTML);
+      if (saved.tideBadge) setBadge('tide-badge', saved.tideBadge.text, saved.tideBadge.color, saved.tideBadge.bg);
+    } else {
+      setBadge('tide-badge', '--', '#7eb8d4', 'rgba(126,184,212,0.15)');
+      setHTML('tides-body', errorHTML('Tide data unavailable: ' + e.message));
+    }
   }
 }
 
@@ -1694,9 +1823,7 @@ function setupTideMiniInteraction(pts, events, SVG_W, PL, PR) {
     if (crosshair) crosshair.style.display = 'none';
   }
 
-  container.addEventListener('touchstart', e => { e.preventDefault(); show(e.touches[0].clientX); }, { passive: false });
-  container.addEventListener('touchmove',  e => { e.preventDefault(); show(e.touches[0].clientX); }, { passive: false });
-  container.addEventListener('touchend', hide);
+  bindChartScrub(container, show, hide);
   container.addEventListener('mousemove', e => show(e.clientX));
   container.addEventListener('mouseleave', hide);
 }
@@ -2090,9 +2217,7 @@ function setupWindChartInteraction(pts) {
     const ch = container.querySelector('.wind-crosshair'); if (ch) ch.style.display = 'none';
   }
 
-  container.addEventListener('touchstart', e => { e.preventDefault(); show(e.touches[0].clientX); }, { passive: false });
-  container.addEventListener('touchmove',  e => { e.preventDefault(); show(e.touches[0].clientX); }, { passive: false });
-  container.addEventListener('touchend', hide);
+  bindChartScrub(container, show, hide);
   container.addEventListener('mousemove', e => show(e.clientX));
   container.addEventListener('mouseleave', hide);
 }
@@ -2138,9 +2263,9 @@ function updateOnlineStatus() {
   if (!el) return;
   if (!navigator.onLine) {
     const last = document.getElementById('lastUpdated');
-    const stamp = last && /^Updated /.test(last.textContent) ? last.textContent.replace(/^Updated /, '') : null;
-    el.textContent = stamp
-      ? `Offline — can’t refresh. Last update ${stamp} may be out of date.`
+    const match = last && last.textContent.match(/(\d{1,2}:\d{2}\s*[AP]M)/i);
+    el.textContent = match
+      ? `Offline — can’t refresh. Last update ${match[1]} may be out of date.`
       : 'Offline — connect to the internet to load conditions.';
     el.style.display = 'block';
   } else {
@@ -2397,13 +2522,15 @@ function render7DayOutlook() {
       return `<span style="display:inline-block;transform:rotate(${w.dir + 180}deg);font-size:12px;line-height:1;color:var(--text-secondary)">↑</span>`;
     }).join('');
 
-    // Color bar segments (AM, MID, PM)
-    const swellBars = d.swell.map(s =>
-      `<div style="flex:1;height:6px;border-radius:3px;background:${swellBarColor(s)}"></div>`
-    ).join('');
-    const windBars = d.wind.map(w =>
-      `<div style="flex:1;height:6px;border-radius:3px;background:${windBarColor(w)}"></div>`
-    ).join('');
+    const slotNames = ['Morning', 'Midday', 'Afternoon'];
+    const swellBars = d.swell.map((s, i) => {
+      const words = swellWords(s);
+      return `<div title="${slotNames[i]}: ${words}" aria-label="${slotNames[i]}: ${words}" style="flex:1;font-size:8px;font-weight:800;line-height:1.15;color:${swellBarColor(s)}">${words.replace(' swell', '')}</div>`;
+    }).join('');
+    const windBars = d.wind.map((w, i) => {
+      const words = windWords(w);
+      return `<div title="${slotNames[i]}: ${words}" aria-label="${slotNames[i]}: ${words}" style="flex:1;font-size:8px;font-weight:800;line-height:1.15;color:${windBarColor(w)}">${words.replace(' wind', '')}</div>`;
+    }).join('');
 
     const isActive = d.date.toDateString() === now.toDateString();
     const highlight = isActive ? 'background:rgba(30,144,255,0.08);' : '';
@@ -2419,21 +2546,54 @@ function render7DayOutlook() {
     </div>`;
   }).join('');
 
-  // ── Legend for color bars ───────────────────────────────────────────────
-  const legend = `<div style="display:flex;justify-content:space-between;margin-top:5px;font-size:9px;color:var(--text-muted);font-family:monospace">
-    <div style="display:flex;align-items:center;gap:4px">
-      <span style="width:6px;height:6px;border-radius:3px;background:#00c853;display:inline-block"></span>
-      <span style="width:6px;height:6px;border-radius:3px;background:#ffeb3b;display:inline-block"></span>
-      <span style="width:6px;height:6px;border-radius:3px;background:#ff9800;display:inline-block"></span>
-      <span style="width:6px;height:6px;border-radius:3px;background:#f44336;display:inline-block"></span>
-      <span style="margin-left:2px">Swell (top) / Wind (bottom)</span>
-    </div>
-  </div>`;
+  const legend = `<div style="margin-top:6px;font-size:12px;color:var(--text-secondary);font-family:monospace">Top word is swell size. Bottom word is wind.</div>`;
 
   setHTML('7day-body', `
     <div style="display:flex;overflow-x:auto;border:1px solid var(--border);border-radius:8px;-webkit-overflow-scrolling:touch">${cols}</div>
     ${legend}
     <div class="buoy-source" style="margin-top:8px"><a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener" class="src-link">Open-Meteo Marine + Weather API ↗</a></div>`);
+  renderBestWindow();
+}
+
+function swellWords(arr) {
+  if (!arr.length) return '—';
+  const max = Math.max(...arr.map(p => p.swHt));
+  if (max >= 5) return 'Solid swell';
+  if (max >= 3) return 'Fun swell';
+  if (max >= 1.5) return 'Small swell';
+  if (max >= 0.5) return 'Tiny swell';
+  return 'Flat swell';
+}
+
+function windWords(arr) {
+  if (!arr.length) return '—';
+  const avg = arr.reduce((s, p) => s + p.spd, 0) / arr.length;
+  if (avg < 8) return 'Calm wind';
+  if (avg < 14) return 'Moderate wind';
+  if (avg < 22) return 'Fresh wind';
+  return 'Strong wind';
+}
+
+function renderBestWindow() {
+  const el = document.getElementById('best-window');
+  if (!el) return;
+  if (!EXTENDED_DATA.swell || !EXTENDED_DATA.wind) {
+    el.hidden = true;
+    return;
+  }
+  const peak = computePeakHours(EXTENDED_DATA.swell, EXTENDED_DATA.wind, BEACH_FACING());
+  if (!peak) {
+    el.hidden = true;
+    el.innerHTML = '';
+    return;
+  }
+  const color = QUALITY_COLORS[peak.label] || '#f4fbff';
+  const kicker = bestWindowKicker(peak.start, new Date());
+  el.hidden = false;
+  el.innerHTML = `<span class="best-window-kicker">${kicker}</span>
+    <span class="best-window-time">${fmtTime(peak.start)} – ${fmtTime(peak.end)}</span>
+    <span class="best-window-rating" style="color:${color}">${peak.label}</span>`;
+  if (ACTIVE?.id) captureConditions(ACTIVE.id);
 }
 
 // ─── Live Buoy Map ───────────────────────────────────────────────────────────
@@ -2887,7 +3047,7 @@ function setupMapPan(svgEl, mapW, mapH) {
       capturedId = e.pointerId;
       svgEl.setPointerCapture(e.pointerId);
       svgEl.style.cursor = 'grabbing';
-      if (_mapWindAnim) { cancelAnimationFrame(_mapWindAnim.raf); _mapWindAnim = null; }
+      stopMapWind();
     } else if (activePointers.size === 2) {
       // Second finger - switch to pinch zoom
       dragging = false;
@@ -2897,7 +3057,7 @@ function setupMapPan(svgEl, mapW, mapH) {
       }
       const pts = [...activePointers.values()];
       lastPinchDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      if (_mapWindAnim) { cancelAnimationFrame(_mapWindAnim.raf); _mapWindAnim = null; }
+      stopMapWind();
     }
   });
 
@@ -2972,7 +3132,7 @@ function setupMapPan(svgEl, mapW, mapH) {
   // Scroll-wheel zoom (trackpad / mouse)
   svgEl.addEventListener('wheel', e => {
     e.preventDefault();
-    if (_mapWindAnim) { cancelAnimationFrame(_mapWindAnim.raf); _mapWindAnim = null; }
+    stopMapWind();
     const vb = getVB();
     const ar = vb[2] / vb[3];
     const scale = e.deltaY > 0 ? 1.08 : 0.92;
@@ -3017,8 +3177,39 @@ function windColorRGB(spd) {
   return WIND_RAMP[WIND_RAMP.length-1][1];
 }
 
+function mapCardOnScreen() {
+  const card = document.getElementById('card-buoy-map');
+  if (!card) return false;
+  const r = card.getBoundingClientRect();
+  return r.bottom > 24 && r.top < window.innerHeight - 24;
+}
+
+function stopMapWind() {
+  if (!_mapWindAnim) return;
+  if (_mapWindAnim.timer) clearTimeout(_mapWindAnim.timer);
+  if (_mapWindAnim.raf) cancelAnimationFrame(_mapWindAnim.raf);
+  _mapWindAnim = null;
+}
+
+let _mapPowerBound = false;
+function bindMapPowerSave() {
+  if (_mapPowerBound) return;
+  _mapPowerBound = true;
+  const resume = () => {
+    if (document.hidden || !_buoyMapState || !mapCardOnScreen()) return;
+    if (_mapWindAnim && _mapWindAnim.timer) return;
+    startBuoyWindAnimation();
+  };
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopMapWind();
+    else resume();
+  });
+  window.addEventListener('scroll', resume, { passive: true });
+}
+
 function startBuoyWindAnimation() {
-  if (_mapWindAnim) { cancelAnimationFrame(_mapWindAnim.raf); _mapWindAnim = null; }
+  stopMapWind();
+  bindMapPowerSave();
   if (!_buoyMapState) return;
 
   const canvas = document.getElementById('buoy-wind-canvas');
@@ -3115,7 +3306,7 @@ function startBuoyWindAnimation() {
 
   // Particle system
   const avgSpeed = windSources.reduce((s, b) => s + b.speed, 0) / windSources.length;
-  const count = Math.min(Math.floor(20 + avgSpeed * 2), 80);
+  const count = Math.min(Math.floor(12 + avgSpeed * 1.2), 36);
   const particles = [];
 
   function spawnParticle(randomAge) {
@@ -3130,8 +3321,8 @@ function startBuoyWindAnimation() {
     const w = windAt(x, y);
     const rad = ((w.dir + 180) % 360) * Math.PI / 180;
     const spd = w.speed * 0.6 + Math.random() * (w.gust - w.speed) * 0.4;
-    const pxPerFrame = 0.06 + spd * 0.025;
-    const maxAge = 120 + Math.random() * 160;
+    const pxPerFrame = (0.06 + spd * 0.025) * 4.5;
+    const maxAge = 28 + Math.random() * 36;
 
     return {
       x, y,
@@ -3146,13 +3337,11 @@ function startBuoyWindAnimation() {
 
   for (let i = 0; i < count; i++) particles.push(spawnParticle(true));
 
-  function draw() {
-    ctx.clearRect(0, 0, cw, ch);
+  ctx.imageSmoothingEnabled = true;
 
-    // Draw cached wind color overlay (low-res scaled up = smooth gradient)
+  function drawFrame() {
+    ctx.clearRect(0, 0, cw, ch);
     ctx.globalAlpha = 0.35;
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(overlayCanvas, 0, 0, cw, ch);
     ctx.globalAlpha = 1;
 
@@ -3187,53 +3376,98 @@ function startBuoyWindAnimation() {
       ctx.lineCap = 'round';
       ctx.stroke();
     }
-
-    _mapWindAnim.raf = requestAnimationFrame(draw);
   }
 
-  _mapWindAnim = { raf: requestAnimationFrame(draw) };
+  const animId = {};
+  function tick() {
+    if (!_mapWindAnim || _mapWindAnim.id !== animId) return;
+    if (document.hidden || !mapCardOnScreen()) {
+      stopMapWind();
+      return;
+    }
+    drawFrame();
+    if (_mapWindAnim && _mapWindAnim.id === animId) {
+      _mapWindAnim.timer = setTimeout(tick, 80);
+    }
+  }
+  _mapWindAnim = { id: animId, timer: setTimeout(tick, 0) };
 }
 
 // ─── Refresh all ──────────────────────────────────────────────────────────────
+let _shownSpotId = null;
+
+function resetForecastCards() {
+  setHTML('7day-body', loadingHTML());
+  setHTML('buoy-map-body', loadingHTML());
+  setHTML('swell-body', loadingHTML());
+  setHTML('wind-forecast-body', loadingHTML());
+  setHTML('sun-moon-body', loadingHTML());
+  setHTML('uv-body', loadingHTML());
+  if (ACTIVE.isUS && ACTIVE.marineZone) setHTML('marine-body', loadingHTML());
+}
+
+function resetConditionCards() {
+  setHTML('buoy-body', loadingHTML());
+  setHTML('wind-body', loadingHTML());
+  setHTML('water-temp-body', loadingHTML());
+  const tideMini = document.getElementById('tide-mini');
+  const tideDaily = document.getElementById('tide-daily');
+  if (tideMini) tideMini.innerHTML = '';
+  if (tideDaily) tideDaily.innerHTML = '';
+  if (ACTIVE.isUS && ACTIVE.tideStation) setHTML('tides-body', loadingHTML());
+  const best = document.getElementById('best-window');
+  if (best) { best.hidden = true; best.innerHTML = ''; }
+}
+
+function offlineForecastNote() {
+  return '<div class="stat-label">Reconnect to load the forecast.</div>';
+}
+
 async function refreshAll() {
   if (!ACTIVE) return;
   const gen = ++_refreshGen;
   const spotId = ACTIVE.id;
+  const switching = _shownSpotId !== spotId;
+  _shownSpotId = spotId;
+  const saved = getLastReading(spotId);
 
   if (!navigator.onLine) {
+    if (switching) {
+      stopMapWind();
+      if (saved) paintLastReading(saved);
+      else resetConditionCards();
+      const note = offlineForecastNote();
+      setHTML('7day-body', note);
+      setHTML('buoy-map-body', note);
+      setHTML('swell-body', note);
+      setHTML('wind-forecast-body', note);
+      setHTML('sun-moon-body', note);
+      setHTML('uv-body', note);
+      if (ACTIVE.isUS && ACTIVE.marineZone) setHTML('marine-body', note);
+    }
     const last = document.getElementById('lastUpdated');
-    if (last && !/^Updated /.test(last.textContent)) last.textContent = 'Offline';
+    if (saved && last) last.textContent = `Last reading ${fmtTime(new Date(saved.savedAt))}`;
+    else if (last && !/^(Updated|Last reading) /.test(last.textContent || '')) last.textContent = 'Offline';
     updateOnlineStatus();
     return;
   }
 
-  if (_mapWindAnim) { cancelAnimationFrame(_mapWindAnim.raf); _mapWindAnim = null; }
-
+  stopMapWind();
   const btn = document.getElementById('refreshBtn');
   btn.classList.add('spinning');
-  setHTML('lastUpdated', 'Updating…');
 
-  // Reset visible card bodies to loading state
   QSTATE.swell = null;
   QSTATE.windKts = null;
   QSTATE.windDir = null;
   EXTENDED_DATA.swell = null;
-  EXTENDED_DATA.wind  = null;
-  setHTML('7day-body',          loadingHTML());
-  setHTML('buoy-body',          loadingHTML());
-  setHTML('wind-body',          loadingHTML());
-  const _tm = document.getElementById('tide-mini'); if (_tm) _tm.innerHTML = '';
-  const _td = document.getElementById('tide-daily'); if (_td) _td.innerHTML = '';
-  setHTML('buoy-map-body',      loadingHTML());
-  setHTML('swell-body',         loadingHTML());
-  setHTML('wind-forecast-body', loadingHTML());
-  setHTML('sun-moon-body',      loadingHTML());
-  setHTML('uv-body',            loadingHTML());
-  if (ACTIVE.isUS && ACTIVE.tideStation) setHTML('tides-body',  loadingHTML());
-  if (ACTIVE.isUS && ACTIVE.marineZone)  setHTML('marine-body', loadingHTML());
+  EXTENDED_DATA.wind = null;
 
-  // Current conditions finish first so the forecast cards read the same buoy values.
-  await loadBuoy(gen, spotId);
+  if (saved) paintLastReading(saved);
+  else resetConditionCards();
+  resetForecastCards();
+  setHTML('lastUpdated', saved ? `Last reading ${fmtTime(new Date(saved.savedAt))}` : 'Updating…');
+
+  const buoyOk = await loadBuoy(gen, spotId);
   if (!stillCurrent(gen, spotId)) return;
 
   await Promise.allSettled([
@@ -3248,7 +3482,11 @@ async function refreshAll() {
 
   if (!stillCurrent(gen, spotId)) return;
   btn.classList.remove('spinning');
-  setHTML('lastUpdated', `Updated ${fmtTime(new Date())}`);
+  if (buoyOk) {
+    setHTML('lastUpdated', `Updated ${fmtTime(new Date())}`);
+  } else if (saved) {
+    setHTML('lastUpdated', `Couldn't refresh · last reading ${fmtTime(new Date(saved.savedAt))}`);
+  }
   updateOnlineStatus();
 }
 

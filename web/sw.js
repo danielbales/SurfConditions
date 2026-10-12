@@ -1,4 +1,4 @@
-const CACHE_NAME = 'surf-conditions-v56';
+const CACHE_NAME = 'surf-conditions-v58';
 const WORKER_URL = 'https://surf-alerts.dbales1210.workers.dev';
 const APP_SHELL = [
   '/SurfConditions/',
@@ -6,7 +6,9 @@ const APP_SHELL = [
   '/SurfConditions/style.css',
   '/SurfConditions/spot-stations.js',
   '/SurfConditions/app.js',
-  '/SurfConditions/manifest.json'
+  '/SurfConditions/manifest.json',
+  '/SurfConditions/icons/icon-192.png',
+  '/SurfConditions/icons/icon-512.png'
 ];
 
 self.addEventListener('install', event => {
@@ -57,8 +59,8 @@ function showSurfNotification(note) {
   const body = note?.body || 'Check conditions now';
   return self.registration.showNotification(title, {
     body,
-    icon: '/SurfConditions/icons/icon-192.svg',
-    badge: '/SurfConditions/icons/icon-192.svg',
+    icon: '/SurfConditions/icons/icon-192.png',
+    badge: '/SurfConditions/icons/icon-192.png',
     // Each beach gets its own tag so two alerts can both stay on screen.
     tag: note?.tag || 'surf-alert',
     renotify: true,

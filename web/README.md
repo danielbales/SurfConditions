@@ -20,14 +20,18 @@ All sources are free with no API keys required.
 
 ## Installing on Android (Pixel 9 / Chrome)
 
+The live app is **https://danielbales.github.io/SurfConditions/**
+
+GitHub Pages serves the `web` folder as the site root, so the address does not include `/web`.
+
 1. Open **Chrome** on your Pixel 9
-2. Navigate to the hosted URL (e.g. `https://yourname.github.io/SurfConditions/web/`)
+2. Go to **https://danielbales.github.io/SurfConditions/**
 3. Tap the **three-dot menu** (⋮) in the top-right corner
 4. Tap **"Add to Home screen"**
-5. Confirm the name ("Surf Conditions") and tap **Add**
+5. Confirm the name ("Waves") and tap **Add**
 6. The app icon appears on your home screen — tap it to launch in standalone mode
 
-The app works offline after the first load (app shell is cached by the service worker). Live data requires a network connection and auto-refreshes every 10 minutes.
+The icon is a PNG, which Android uses for the home-screen shortcut. The app shell is cached after the first load. Live readings need a connection and refresh every 10 minutes. If you open the app offline, each beach shows the last good wave, wind, and tide reading it saved.
 
 ## Hosting on GitHub Pages
 
@@ -65,7 +69,7 @@ web/
 ├── manifest.json   # PWA manifest
 ├── sw.js           # Service worker (offline cache)
 ├── icons/
-│   ├── icon-192.svg
-│   └── icon-512.svg
+│   ├── icon-192.png
+│   └── icon-512.png
 └── README.md
 ```

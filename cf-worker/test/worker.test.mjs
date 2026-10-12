@@ -183,3 +183,22 @@ test('saved beaches keep a deletion and pick up the new stations', () => {
   assert.match(app, /Offline — can’t refresh/);
   assert.match(app, /stillCurrent\(gen, spotId\)/);
 });
+
+test('a vertical swipe scrolls and a sideways swipe scrubs', () => {
+  const app = fs.readFileSync(new URL('../../web/app.js', import.meta.url), 'utf8');
+  const src = app.match(/function chartGesture\(dx, dy\) \{[\s\S]*?\n\}/)[0]
+    + '\n' + app.match(/function bestWindowKicker\(start, now\) \{[\s\S]*?\n\}/)[0];
+  const ctx = {};
+  vm.createContext(ctx);
+  vm.runInContext(src, ctx);
+  assert.equal(ctx.chartGesture(2, 3), null);
+  assert.equal(ctx.chartGesture(24, 6), 'scrub');
+  assert.equal(ctx.chartGesture(6, 24), 'scroll');
+  const today = new Date('2026-10-12T18:00:00');
+  assert.equal(ctx.bestWindowKicker(today, today), 'Best window today');
+  assert.equal(ctx.bestWindowKicker(new Date('2026-10-13T09:00:00'), today), 'Next best window');
+  assert.match(app, /touch-action:pan-y/);
+  assert.match(app, /surf_last_reading_v1/);
+  assert.match(app, /setTimeout\(tick, 80\)/);
+  assert.doesNotMatch(app, /id="rip-body"|card-rip/);
+});

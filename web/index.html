@@ -11,6 +11,8 @@
   <meta name="apple-mobile-web-app-title" content="Waves">
   <title>Waves</title>
   <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -26,10 +28,10 @@
     <div class="subtitle" id="location-subtitle"></div>
   </div>
   <div class="header-right">
-    <button class="header-btn" id="alertBtn" style="display:none" onclick="toggleAlerts()" title="Alerts OFF">🔕</button>
-    <button class="header-btn" id="editSpotsBtn" onclick="openSpotEditor(true)" title="Edit spots">⚙️</button>
-    <button class="header-btn" id="refreshBtn" onclick="refreshAll()" title="Refresh">
-      <span class="icon">↻</span>
+    <button class="header-btn" id="alertBtn" style="display:none" onclick="toggleAlerts()" title="Alerts off" aria-label="Alerts off">🔕</button>
+    <button class="header-btn" id="editSpotsBtn" onclick="openSpotEditor(true)" title="Edit spots" aria-label="Edit spots">⚙️</button>
+    <button class="header-btn" id="refreshBtn" onclick="refreshAll()" title="Refresh" aria-label="Refresh">
+      <span class="icon" aria-hidden="true">↻</span>
     </button>
   </div>
 </header>
@@ -38,6 +40,7 @@
 
 <div class="last-updated" id="lastUpdated">Loading…</div>
 <div class="offline-indicator" id="offlineIndicator" style="display:none">Offline — connect to the internet to load conditions.</div>
+<div id="best-window" class="best-window" hidden></div>
 
 <main>
 
@@ -50,8 +53,8 @@
     <div class="section-body">
 
       <!-- Waves+Wind / Tide (shared row) -->
-      <div class="card-row" style="display:flex;gap:12px">
-        <div class="card" id="card-buoy" style="flex:1;min-width:0">
+      <div class="card-row">
+        <div class="card" id="card-buoy">
           <div class="card-header">
             <div class="card-title"><span class="icon">🌊</span> Waves and Wind</div>
             <div class="card-badge" id="buoy-badge" style="background:rgba(0,212,170,0.15);color:#00d4aa">MODEL</div>
@@ -63,7 +66,7 @@
             <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
           </div>
         </div>
-        <div class="card" id="card-wind" style="flex:1;min-width:0">
+        <div class="card" id="card-wind">
           <div class="card-header">
             <div class="card-title"><span class="icon">🌊</span> Tide</div>
             <div class="card-badge" id="tide-badge" style="background:rgba(155,109,255,0.15);color:#9b6dff">--</div>
@@ -118,8 +121,8 @@
       </div>
 
       <!-- Water Temperature + UV Index (shared row) -->
-      <div class="card-row" style="display:flex;gap:12px">
-        <div class="card" id="card-water-temp" style="flex:1;min-width:0">
+      <div class="card-row">
+        <div class="card" id="card-water-temp">
           <div class="card-header">
             <div class="card-title"><span class="icon">💧</span> Water Temp</div>
             <div class="card-badge" id="water-temp-badge" style="background:rgba(30,144,255,0.15);color:#1e90ff">--</div>
@@ -128,7 +131,7 @@
             <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
           </div>
         </div>
-        <div class="card" id="card-uv" style="flex:1;min-width:0">
+        <div class="card" id="card-uv">
           <div class="card-header">
             <div class="card-title"><span class="icon">☀️</span> UV Index</div>
             <div class="card-badge" id="uv-badge" style="background:rgba(0,200,83,0.15);color:#00c853">--</div>
