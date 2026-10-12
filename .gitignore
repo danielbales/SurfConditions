@@ -5,3 +5,4 @@ SurfConditions.app/
 *.d
 .env
 surf_alert.log
+.wrangler/

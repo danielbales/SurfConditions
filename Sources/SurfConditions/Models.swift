@@ -210,8 +210,8 @@ struct BuoyObservation: Codable {
     let avgPeriod: Double        // seconds
     let waveDirection: Double    // degrees
     let waterTemp: Double        // °F (converted from °C)
-    let windSpeed: Double        // mph (converted from m/s)
-    let windDirection: Double    // degrees
+    let windSpeed: Double?       // mph (converted from m/s); nil when the buoy does not report wind
+    let windDirection: Double?   // degrees
     let observedAt: Date?
     var recentWaveHeights: [Double]
 }

@@ -198,8 +198,8 @@ class SurfDataService: ObservableObject {
                 return Double(s)
             }
 
-            let wdir  = val(cols, 5) ?? 0
-            let wspd  = (val(cols, 6) ?? 0) * 2.23694   // m/s → mph
+            let wdir  = val(cols, 5)
+            let wspd  = val(cols, 6).map { $0 * 2.23694 }   // m/s → mph; nil when the buoy reports MM
             let wvht  = (val(cols, 8) ?? 0) * 3.28084   // m → ft
             let dpd   = val(cols, 9) ?? 0
             let apd   = val(cols, 10) ?? 0

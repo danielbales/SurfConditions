@@ -19,13 +19,13 @@ const SPOTS = {
   carmel: {
     name: 'Carmel Beach',
     lat: 36.5535, lng: -121.9255,
-    noaaStation: '9413450',
+    noaaStation: '9413375', // Carmel Cove — same gauge the phone app shows
     check(marine, wind, tide) {
       if (marine.swellFt < 6.0)                       return null;
       if (marine.swellPeriod < 5 || marine.swellPeriod > 12) return null;
       if (tide === null || tide < 3.0)                 return null;
       if (!inRange(wind.dir, 22.5, 112.5))             return null; // E or NE
-      return `${marine.swellFt}ft @ ${marine.swellPeriod}s · Tide ${tide}ft · Wind ${dirLabel(wind.dir)} ${wind.speed}mph`;
+      return `${marine.swellFt}ft @ ${marine.swellPeriod}s · Tide ${tide}ft · Wind ${dirLabel(wind.dir)} ${wind.speed} kt`;
     },
   },
   asilomar: {
@@ -35,7 +35,7 @@ const SPOTS = {
     check(marine, wind) {
       if (marine.swellFt < 4.0)              return null;
       if (!inRange(wind.dir, 67.5, 202.5))   return null; // S, SE, or E
-      return `${marine.swellFt}ft @ ${marine.swellPeriod}s · Wind ${dirLabel(wind.dir)} ${wind.speed}mph`;
+      return `${marine.swellFt}ft @ ${marine.swellPeriod}s · Wind ${dirLabel(wind.dir)} ${wind.speed} kt`;
     },
   },
   mosslanding: {
@@ -46,10 +46,17 @@ const SPOTS = {
       if (marine.swellFt < 4.0)              return null;
       if (marine.swellPeriod < 10)           return null; // groundswell only — closes out on windswell
       if (!inRange(wind.dir, 22.5, 157.5))   return null; // NE through SE (offshore-ish)
-      return `${marine.swellFt}ft @ ${marine.swellPeriod}s · Wind ${dirLabel(wind.dir)} ${wind.speed}mph`;
+      return `${marine.swellFt}ft @ ${marine.swellPeriod}s · Wind ${dirLabel(wind.dir)} ${wind.speed} kt`;
     },
   },
 };
+
+// Carmel's 5–12 second period window is unchanged on purpose. See the PR notes.
+export function spotAlertMessage(key, marine, wind, tide) {
+  const spot = SPOTS[key];
+  if (!spot) return null;
+  return spot.check(marine, wind, tide);
+}
 
 // ─── Direction helpers ────────────────────────────────────────────────────────
 function inRange(deg, lo, hi) { return deg >= lo && deg <= hi; }
@@ -75,7 +82,7 @@ async function fetchMarine(lat, lng) {
 
 async function fetchWind(lat, lng) {
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}`
-    + `&current=wind_speed_10m,wind_direction_10m&wind_speed_unit=mph&timezone=America/Los_Angeles`;
+    + `&current=wind_speed_10m,wind_direction_10m&wind_speed_unit=kn&timezone=America/Los_Angeles`;
   const r = await fetch(url);
   const c = (await r.json()).current;
   return {
@@ -84,23 +91,90 @@ async function fetchWind(lat, lng) {
   };
 }
 
+// Calendar date in Pacific time. toISOString() is UTC, so after 5pm Pacific
+// it already reads as tomorrow and the tide request comes back empty.
+export function pacificYYYYMMDD(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const pick = type => parts.find(p => p.type === type).value;
+  return `${pick('year')}${pick('month')}${pick('day')}`;
+}
+
+// "2026-10-12 18:38" from NOAA is Pacific local time, not UTC.
+export function parsePacificDateTime(s) {
+  const [date, time] = s.split(' ');
+  const [y, m, d] = date.split('-').map(Number);
+  const [hh, mm] = time.split(':').map(Number);
+  const rough = new Date(Date.UTC(y, m - 1, d, hh, mm));
+  const tz = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    timeZoneName: 'shortOffset',
+    hour: '2-digit',
+  }).formatToParts(rough).find(p => p.type === 'timeZoneName')?.value || 'GMT-7';
+  const match = tz.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
+  const sign = match && match[1] === '-' ? -1 : 1;
+  const offMin = match ? sign * (Number(match[2]) * 60 + Number(match[3] || 0)) : -420;
+  return new Date(Date.UTC(y, m - 1, d, hh, mm) - offMin * 60 * 1000);
+}
+
+// Current height from high/low predictions when a station has no live gauge.
+export function tideNowFromPredictions(predictions, now = new Date()) {
+  const events = (predictions || [])
+    .map(p => ({ t: parsePacificDateTime(p.t), v: parseFloat(p.v) }))
+    .filter(p => !Number.isNaN(p.t.getTime()) && !Number.isNaN(p.v))
+    .sort((a, b) => a.t - b.t);
+  if (events.length < 2) return null;
+  let i = events.findIndex(e => e.t > now);
+  if (i <= 0) return null;
+  const a = events[i - 1];
+  const b = events[i];
+  const frac = (now - a.t) / (b.t - a.t);
+  const v = a.v + (b.v - a.v) * (1 - Math.cos(frac * Math.PI)) / 2;
+  return Math.round(v * 100) / 100;
+}
+
 async function fetchTide(station) {
-  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter`
+  const today = pacificYYYYMMDD();
+  const tomorrow = pacificYYYYMMDD(new Date(Date.now() + 24 * 60 * 60 * 1000));
+  const obsUrl = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter`
     + `?station=${station}&product=water_level&datum=MLLW`
-    + `&time_zone=lst_ldt&units=english&format=json&begin_date=${today}&end_date=${today}`;
-  const r = await fetch(url);
-  const data = (await r.json()).data ?? [];
-  if (!data.length) return null;
-  return Math.round(parseFloat(data[data.length - 1].v) * 100) / 100;
+    + `&time_zone=lst_ldt&units=english&format=json&date=latest`;
+  try {
+    const obs = await (await fetch(obsUrl)).json();
+    if (obs.data?.length) {
+      return Math.round(parseFloat(obs.data[obs.data.length - 1].v) * 100) / 100;
+    }
+  } catch {}
+
+  const predUrl = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter`
+    + `?station=${station}&product=predictions&datum=MLLW&interval=hilo`
+    + `&time_zone=lst_ldt&units=english&format=json&begin_date=${today}&end_date=${tomorrow}`;
+  const preds = (await (await fetch(predUrl)).json()).predictions;
+  return tideNowFromPredictions(preds);
 }
 
 // ─── CORS + response helpers ──────────────────────────────────────────────────
 
+// github.io in production, localhost when you open the app on your computer.
+export function isAllowedOrigin(origin) {
+  if (ALLOWED_ORIGINS.has(origin)) return true;
+  try {
+    const u = new URL(origin);
+    const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+    return local && (u.protocol === 'http:' || u.protocol === 'https:');
+  } catch {
+    return false;
+  }
+}
+
 // Returns the request's Origin if it's in the allowlist, otherwise null.
 function getAllowedOrigin(request) {
   const origin = request.headers.get('Origin') ?? '';
-  return ALLOWED_ORIGINS.has(origin) ? origin : null;
+  return isAllowedOrigin(origin) ? origin : null;
 }
 
 // Builds a response with appropriate CORS headers.
@@ -121,8 +195,8 @@ function respond(body, status = 200, origin = null, extra = {}) {
 // ─── Rate limiting (KV-based, per IP) ────────────────────────────────────────
 // Allows up to `limit` requests from a single IP within `windowSec` seconds.
 // Uses a KV key per IP with a rolling TTL — cheap and sufficient for abuse prevention.
-async function checkRateLimit(env, ip, limit = 10, windowSec = 60) {
-  const key = `rl_${ip}`;
+export async function checkRateLimit(env, ip, limit = 10, windowSec = 60, bucket = 'gen') {
+  const key = `rl_${bucket}_${ip}`;
   const val   = await env.SURF_SUBS.get(key);
   const count = val ? parseInt(val, 10) : 0;
   if (count >= limit) return false;
@@ -164,28 +238,112 @@ async function buildVapidJWT(env, audience) {
   return `${unsigned}.${b64urlEncode(sig)}`;
 }
 
-// ─── Push fanout ──────────────────────────────────────────────────────────────
-async function broadcastPush(env, title, body) {
-  await env.SURF_SUBS.put('_latest_alert', JSON.stringify({ title, body }), { expirationTtl: 3600 });
+function concatBytes(...arrays) {
+  const len = arrays.reduce((n, a) => n + a.length, 0);
+  const out = new Uint8Array(len);
+  let offset = 0;
+  for (const a of arrays) {
+    out.set(a, offset);
+    offset += a.length;
+  }
+  return out;
+}
 
-  const list = await env.SURF_SUBS.list();
-  await Promise.all(
-    list.keys.filter(k => !k.name.startsWith('_')).map(async k => {
-      try {
-        const sub = JSON.parse(await env.SURF_SUBS.get(k.name));
-        const audience = new URL(sub.endpoint).origin;
-        const jwt = await buildVapidJWT(env, audience);
-        const res = await fetch(sub.endpoint, {
-          method: 'POST',
-          headers: {
-            'Authorization': `vapid t=${jwt}, k=${env.VAPID_PUBLIC_KEY}`,
-            'TTL': '86400', 'Urgency': 'high', 'Content-Length': '0',
-          },
-        });
-        if (res.status === 410 || res.status === 404) await env.SURF_SUBS.delete(k.name);
-      } catch {}
-    })
-  );
+async function hmacSha256(keyBytes, data) {
+  const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return new Uint8Array(await crypto.subtle.sign('HMAC', key, data));
+}
+
+async function hkdfExtract(salt, ikm) {
+  return hmacSha256(salt, ikm);
+}
+
+async function hkdfExpand(prk, info, length) {
+  const block = await hmacSha256(prk, concatBytes(info, new Uint8Array([1])));
+  return block.slice(0, length);
+}
+
+async function hkdf(salt, ikm, info, length) {
+  return hkdfExpand(await hkdfExtract(salt, ikm), info, length);
+}
+
+// RFC 8291 aes128gcm body. Each notification carries its own text, so two
+// beaches firing together cannot overwrite each other.
+export async function encryptPushBody(subscription, payload) {
+  const uaPublic = b64urlDecode(subscription.keys.p256dh);
+  const auth = b64urlDecode(subscription.keys.auth);
+  if (uaPublic.length !== 65) throw new Error('Bad p256dh key');
+  if (auth.length < 16) throw new Error('Bad auth secret');
+
+  const asKey = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+  const asPublic = new Uint8Array(await crypto.subtle.exportKey('raw', asKey.publicKey));
+  const uaKey = await crypto.subtle.importKey('raw', uaPublic, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+  const shared = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: uaKey }, asKey.privateKey, 256));
+
+  const keyInfo = concatBytes(new TextEncoder().encode('WebPush: info\0'), uaPublic, asPublic);
+  const ikm = await hkdf(auth, shared, keyInfo, 32);
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const cek = await hkdf(salt, ikm, new TextEncoder().encode('Content-Encoding: aes128gcm\0'), 16);
+  const nonce = await hkdf(salt, ikm, new TextEncoder().encode('Content-Encoding: nonce\0'), 12);
+
+  const plaintext = new TextEncoder().encode(JSON.stringify(payload));
+  const RS = 4096;
+  const record = new Uint8Array(RS - 16);
+  if (plaintext.length + 1 > record.length) throw new Error('Alert text is too long');
+  record.set(plaintext, 0);
+  record[plaintext.length] = 2;
+
+  const aesKey = await crypto.subtle.importKey('raw', cek, 'AES-GCM', false, ['encrypt']);
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce }, aesKey, record));
+
+  const rsBytes = new Uint8Array(4);
+  new DataView(rsBytes.buffer).setUint32(0, RS, false);
+  return concatBytes(salt, rsBytes, new Uint8Array([asPublic.length]), asPublic, ciphertext);
+}
+
+async function listSubscriptionKeys(env) {
+  const names = [];
+  let cursor;
+  do {
+    const page = await env.SURF_SUBS.list(cursor ? { cursor, limit: 1000 } : { limit: 1000 });
+    for (const k of page.keys) {
+      if (k.name.startsWith('sub_')) names.push(k.name);
+    }
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+  return names;
+}
+
+// ─── Push fanout ──────────────────────────────────────────────────────────────
+async function broadcastPush(env, title, body, tag = 'surf-alert') {
+  const payload = { title, body, tag };
+  await env.SURF_SUBS.put('_latest_alert', JSON.stringify(payload), { expirationTtl: 3600 });
+
+  const names = await listSubscriptionKeys(env);
+  await Promise.all(names.map(async name => {
+    try {
+      const sub = JSON.parse(await env.SURF_SUBS.get(name));
+      const audience = new URL(sub.endpoint).origin;
+      const jwt = await buildVapidJWT(env, audience);
+      const headers = {
+        'Authorization': `vapid t=${jwt}, k=${env.VAPID_PUBLIC_KEY}`,
+        'TTL': '86400',
+        'Urgency': 'high',
+      };
+      let bodyBytes = null;
+      if (sub.keys?.p256dh && sub.keys?.auth) {
+        bodyBytes = await encryptPushBody(sub, payload);
+        headers['Content-Encoding'] = 'aes128gcm';
+        headers['Content-Type'] = 'application/octet-stream';
+      } else {
+        headers['Content-Length'] = '0';
+      }
+      const res = await fetch(sub.endpoint, { method: 'POST', headers, body: bodyBytes });
+      if (res.status === 410 || res.status === 404) await env.SURF_SUBS.delete(name);
+    } catch (e) {
+      console.error('[surf-alerts] push failed:', e.message);
+    }
+  }));
 }
 
 // ─── Scheduled condition check (runs every 10 min via cron) ───────────────────
@@ -202,7 +360,7 @@ async function checkConditions(env) {
       const msg  = spot.check(marine, wind, tide);
 
       if (msg) {
-        await broadcastPush(env, `🌊 ${spot.name} is firing!`, msg);
+        await broadcastPush(env, `🌊 ${spot.name} is firing!`, msg, `surf-${key}`);
         await env.SURF_SUBS.put(`_cooldown_${key}`, '1', { expirationTtl: COOLDOWN_SEC });
       }
     } catch (e) {
@@ -242,10 +400,9 @@ export default {
       if (!origin) return respond('Forbidden', 403, null);
 
       const { endpoint } = await request.json();
-      const list = await env.SURF_SUBS.list();
-      for (const k of list.keys.filter(k => !k.name.startsWith('_'))) {
-        const sub = JSON.parse(await env.SURF_SUBS.get(k.name));
-        if (sub.endpoint === endpoint) { await env.SURF_SUBS.delete(k.name); break; }
+      for (const name of await listSubscriptionKeys(env)) {
+        const sub = JSON.parse(await env.SURF_SUBS.get(name));
+        if (sub?.endpoint === endpoint) { await env.SURF_SUBS.delete(name); break; }
       }
       return respond('ok', 200, origin);
     }
@@ -273,23 +430,46 @@ export default {
       return respond('ok', 200, null);
     }
 
-    // GET /proxy/ndbc/:buoyId — public NDBC realtime data proxy (no origin restriction)
+    // GET /proxy/ndbc/:buoyId — NDBC relay for this app only.
+    // Browser calls must come from the site (or localhost). Each IP can miss
+    // the 10-minute cache about 120 times a minute, which covers one phone
+    // loading the map without leaving the relay open to the whole internet.
     if (request.method === 'GET' && url.pathname.startsWith('/proxy/ndbc/')) {
+      if (!origin) {
+        return respond(JSON.stringify({ ok: false, error: 'Forbidden' }), 403, null, {
+          'Content-Type': 'application/json',
+        });
+      }
       const buoyId = url.pathname.split('/')[3];
       if (!buoyId || !/^\d+$/.test(buoyId)) {
-        return respond(JSON.stringify({ ok: false, error: 'Invalid buoy ID' }), 400, '*', {
+        return respond(JSON.stringify({ ok: false, error: 'Invalid buoy ID' }), 400, origin, {
           'Content-Type': 'application/json',
         });
       }
 
+      const jsonHeaders = {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'public, max-age=600',
+      };
+
       try {
+        const cached = await env.SURF_SUBS.get(`ndbc_${buoyId}`);
+        if (cached) return respond(cached, 200, origin, jsonHeaders);
+
+        const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+        if (!(await checkRateLimit(env, ip, 120, 60, 'ndbc'))) {
+          return respond(JSON.stringify({ ok: false, error: 'Too Many Requests' }), 429, origin, {
+            'Content-Type': 'application/json',
+          });
+        }
+
         const [metRes, specRes] = await Promise.all([
           fetch(`https://www.ndbc.noaa.gov/data/realtime2/${buoyId}.txt`),
           fetch(`https://www.ndbc.noaa.gov/data/realtime2/${buoyId}.spec`),
         ]);
 
         if (!metRes.ok) {
-          return respond(JSON.stringify({ ok: false, error: `NDBC met fetch failed: ${metRes.status}` }), 502, '*', {
+          return respond(JSON.stringify({ ok: false, error: `NDBC met fetch failed: ${metRes.status}` }), 502, origin, {
             'Content-Type': 'application/json',
           });
         }
@@ -299,7 +479,7 @@ export default {
         const metLines = metText.trim().split('\n');
         // First two lines are headers (start with #), data starts at line index 2
         if (metLines.length < 3) {
-          return respond(JSON.stringify({ ok: false, error: 'No met data available' }), 502, '*', {
+          return respond(JSON.stringify({ ok: false, error: 'No met data available' }), 502, origin, {
             'Content-Type': 'application/json',
           });
         }
@@ -356,12 +536,11 @@ export default {
           waterTemp_c: wtmp,
         };
 
-        return respond(JSON.stringify(result), 200, '*', {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'public, max-age=600',
-        });
+        const body = JSON.stringify(result);
+        await env.SURF_SUBS.put(`ndbc_${buoyId}`, body, { expirationTtl: 600 });
+        return respond(body, 200, origin, jsonHeaders);
       } catch (e) {
-        return respond(JSON.stringify({ ok: false, error: e.message }), 500, '*', {
+        return respond(JSON.stringify({ ok: false, error: e.message }), 500, origin, {
           'Content-Type': 'application/json',
         });
       }

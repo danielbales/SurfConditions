@@ -1,9 +1,10 @@
-const CACHE_NAME = 'surf-conditions-v55';
+const CACHE_NAME = 'surf-conditions-v56';
 const WORKER_URL = 'https://surf-alerts.dbales1210.workers.dev';
 const APP_SHELL = [
   '/SurfConditions/',
   '/SurfConditions/index.html',
   '/SurfConditions/style.css',
+  '/SurfConditions/spot-stations.js',
   '/SurfConditions/app.js',
   '/SurfConditions/manifest.json'
 ];
@@ -51,26 +52,40 @@ self.addEventListener('fetch', event => {
 });
 
 // ─── Push Notifications ───────────────────────────────────────────────────────
+function showSurfNotification(note) {
+  const title = note?.title || '🌊 Surf Alert';
+  const body = note?.body || 'Check conditions now';
+  return self.registration.showNotification(title, {
+    body,
+    icon: '/SurfConditions/icons/icon-192.svg',
+    badge: '/SurfConditions/icons/icon-192.svg',
+    // Each beach gets its own tag so two alerts can both stay on screen.
+    tag: note?.tag || 'surf-alert',
+    renotify: true,
+    vibrate: [200, 100, 200],
+  });
+}
+
 self.addEventListener('push', event => {
+  let payload = null;
+  try {
+    if (event.data) payload = event.data.json();
+  } catch (e) {}
+
+  if (payload?.title) {
+    event.waitUntil(showSurfNotification(payload));
+    return;
+  }
+
+  // Older alerts had an empty body. Fall back to the last stored message.
   event.waitUntil(
     fetch(`${WORKER_URL}/alert`)
       .then(r => r.json())
-      .then(({ title, body }) =>
-        self.registration.showNotification(title, {
-          body,
-          icon: '/SurfConditions/icons/icon-192.svg',
-          badge: '/SurfConditions/icons/icon-192.svg',
-          tag: 'surf-alert',
-          renotify: true,
-          vibrate: [200, 100, 200],
-        })
-      )
-      .catch(() =>
-        self.registration.showNotification('🌊 Surf Alert', {
-          body: 'Good conditions detected — check DB\'s Local',
-          tag: 'surf-alert',
-        })
-      )
+      .then(showSurfNotification)
+      .catch(() => showSurfNotification({
+        title: '🌊 Surf Alert',
+        body: 'Good conditions — open Waves to check',
+      }))
   );
 });
 

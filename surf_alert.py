@@ -1,10 +1,20 @@
 #!/usr/bin/env python3
 """
-Surf Alert Script — checks conditions at Carmel Beach and Asilomar,
-sends a push notification via the Cloudflare Worker when thresholds are met.
+DISABLED. Surf alerts are sent only by the Cloudflare Worker in cf-worker/.
 
-Run by launchd every 30 minutes via com.danielbales.surfalert.plist
+This Mac script used to check Carmel and Asilomar on its own timer and send
+the same notification the worker sends, so a phone could buzz twice. It now
+exits immediately. A launchd job can stay installed; it will not send alerts
+and it will not error.
+
+Do not turn this back on while the worker cron is running.
 """
+
+import sys
+
+if __name__ == '__main__':
+    print("surf_alert.py is off. Alerts are sent only by the Cloudflare worker.")
+    sys.exit(0)
 
 import json
 import os
@@ -24,7 +34,7 @@ if os.path.exists(_env_path):
 
 # ─── Config ────────────────────────────────────────────────────────────────────
 WORKER_URL    = 'https://surf-alerts.dbales1210.workers.dev'
-NOTIFY_SECRET = os.environ.get('NOTIFY_SECRET') or exit('NOTIFY_SECRET not set — add it to ~/SurfConditions/.env')
+NOTIFY_SECRET = os.environ.get('NOTIFY_SECRET')
 COOLDOWN_SEC = 4 * 60 * 60   # 4 hours between repeat alerts per spot
 STATE_FILE   = os.path.expanduser('~/.surf_alert_state.json')
 
@@ -255,4 +265,5 @@ def main():
     print()
 
 if __name__ == '__main__':
-    main()
+    # Reached only if the notice at the top of this file is removed.
+    sys.exit(0)

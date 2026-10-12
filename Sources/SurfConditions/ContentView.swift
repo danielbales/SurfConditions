@@ -319,6 +319,8 @@ struct WindCard: View {
 
 struct TideCard: View {
     let data: TideData?
+    let stationId: String
+    let stationName: String
 
     var body: some View {
         CardContainer(title: "TIDES", icon: "arrow.up.arrow.down", accent: .oceanPurple) {
@@ -338,6 +340,10 @@ struct TideCard: View {
                         }
                         .padding(.bottom, 2)
                     }
+
+                    Text("NOAA \(stationId) · \(stationName)")
+                        .font(.caption)
+                        .foregroundColor(.oceanSubtext)
 
                     // Next High
                     if let h = d.nextHigh {
@@ -507,9 +513,11 @@ struct SparklineView: View {
 
 struct BuoyCard: View {
     let data: BuoyObservation?
+    let stationId: String
+    let stationName: String
 
     var body: some View {
-        CardContainer(title: "BUOY 46240 · OBSERVED", icon: "antenna.radiowaves.left.and.right", accent: .oceanAccent) {
+        CardContainer(title: "BUOY · \(stationName.uppercased())", icon: "antenna.radiowaves.left.and.right", accent: .oceanAccent) {
             if let d = data {
                 VStack(alignment: .leading, spacing: 8) {
                     SectionLabel(text: "Measured Wave Height")
@@ -518,14 +526,22 @@ struct BuoyCard: View {
                         .font(.system(size: 38, weight: .bold, design: .monospaced))
                         .foregroundColor(.oceanAccent)
 
+                    Text("NDBC \(stationId) · \(stationName)")
+                        .font(.caption)
+                        .foregroundColor(.oceanSubtext)
+
                     DataRow(label: "Dom. Period",  value: String(format: "%.0f sec", d.dominantPeriod))
                     DataRow(label: "Avg Period",   value: String(format: "%.1f sec", d.avgPeriod))
                     DataRow(label: "Wave Dir.",    value: "\(compassDirection(d.waveDirection))  \(Int(d.waveDirection))°")
 
                     Divider().background(Color.oceanBorder).padding(.vertical, 4)
 
-                    DataRow(label: "Buoy Wind",    value: String(format: "%.0f mph", d.windSpeed))
-                    DataRow(label: "Wind Dir.",    value: "\(compassDirection(d.windDirection))  \(Int(d.windDirection))°")
+                    if let ws = d.windSpeed, let wd = d.windDirection {
+                        DataRow(label: "Buoy Wind", value: String(format: "%.0f mph", ws))
+                        DataRow(label: "Wind Dir.", value: "\(compassDirection(wd))  \(Int(wd))°")
+                    } else {
+                        DataRow(label: "Buoy Wind", value: "Not reported")
+                    }
 
                     Text("Observed \(relativeTime(since: d.observedAt))")
                         .font(.caption2)
@@ -1029,14 +1045,14 @@ struct ContentView: View {
                             HStack(alignment: .top, spacing: 14) {
                                 SwellCard(data: service.swellData, beachFacing: service.selectedLocation.beachFacing)
                                 WindCard(data: service.windData)
-                                TideCard(data: service.tideData)
+                                TideCard(data: service.tideData, stationId: service.selectedLocation.tideStation, stationName: service.selectedLocation.tideStationName)
                             }
                             .padding(.horizontal, 20)
                             .padding(.top, 14)
 
                             // Row 2: Buoy, Water Temp, Sun, Moon
                             HStack(alignment: .top, spacing: 14) {
-                                BuoyCard(data: service.buoyData)
+                                BuoyCard(data: service.buoyData, stationId: service.selectedLocation.buoyStation, stationName: service.selectedLocation.buoyName)
                                 WaterTempCard(data: service.buoyData)
                                 SunCard(data: service.sunData)
                                 MoonCard(phase: service.moonPhase)
@@ -1208,7 +1224,7 @@ struct ContentView: View {
         HStack(spacing: 5) {
             Image(systemName: "antenna.radiowaves.left.and.right")
                 .font(.caption2)
-            Text("NOAA \(service.selectedLocation.tideStation) · NDBC \(service.selectedLocation.buoyStation) · Open-Meteo · NWS \(service.selectedLocation.marineZone) · sunrise-sunset.org")
+            Text("\(service.selectedLocation.tideStationName) (\(service.selectedLocation.tideStation)) · \(service.selectedLocation.buoyName) (\(service.selectedLocation.buoyStation)) · Open-Meteo · NWS \(service.selectedLocation.marineZone)")
                 .font(.caption2)
         }
         .foregroundColor(Color.oceanSubtext.opacity(0.6))
