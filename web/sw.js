@@ -1,4 +1,4 @@
-const CACHE_NAME = 'surf-conditions-v56';
+const CACHE_NAME = 'surf-conditions-v57';
 const WORKER_URL = 'https://surf-alerts.dbales1210.workers.dev';
 const APP_SHELL = [
   '/SurfConditions/',
@@ -6,7 +6,9 @@ const APP_SHELL = [
   '/SurfConditions/style.css',
   '/SurfConditions/spot-stations.js',
   '/SurfConditions/app.js',
-  '/SurfConditions/manifest.json'
+  '/SurfConditions/manifest.json',
+  '/SurfConditions/icons/icon-192.png',
+  '/SurfConditions/icons/icon-512.png'
 ];
 
 self.addEventListener('install', event => {

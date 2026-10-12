@@ -7,9 +7,9 @@
   --accent-teal: #00d4aa;
   --accent-purple: #9b6dff;
   --accent-gold: #ffd700;
-  --text-primary: #e8f4fd;
-  --text-secondary: #7eb8d4;
-  --text-muted: #4a7a96;
+  --text-primary: #f4fbff;
+  --text-secondary: #d2e8f6;
+  --text-muted: #9ec3d6;
   --wind-calm: #00c853;
   --wind-light: #69f0ae;
   --wind-moderate: #ffeb3b;
@@ -63,8 +63,9 @@ header {
 }
 
 .header-btn {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -82,7 +83,7 @@ header {
   background: var(--border);
   border-color: var(--text-muted);
 }
-.header-btn .icon { font-size: 16px; }
+.header-btn .icon { font-size: 20px; }
 .header-btn.spinning .icon { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -203,6 +204,72 @@ main {
   display: none;
 }
 
+/* Phone: one full-width card at a time so the numbers stay large in sunlight.
+   Wider screens can put a pair side by side. */
+.card-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.card-row > .card { min-width: 0; }
+@media (min-width: 700px) {
+  .card-row { flex-direction: row; }
+  .card-row > .card { flex: 1; }
+}
+
+.cond-hero {
+  font-weight: 800;
+  font-size: 44px;
+  letter-spacing: -1px;
+  line-height: 0.95;
+}
+.cond-unit {
+  font-size: 16px;
+  font-weight: 700;
+  margin-left: 3px;
+  letter-spacing: 0;
+  color: var(--text-secondary);
+}
+.cond-wind {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+}
+.station-line {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.best-window {
+  margin: 4px 12px 8px;
+  padding: 12px 14px;
+  background: #123056;
+  border: 1px solid #5ea3cc;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.best-window[hidden] { display: none; }
+.best-window-kicker {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.best-window-time {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.4px;
+}
+.best-window-rating {
+  font-size: 16px;
+  font-weight: 800;
+}
+
 /* Cards */
 .card {
   background: var(--bg-card);
@@ -220,7 +287,7 @@ main {
 }
 
 .card-title {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.8px;
@@ -233,10 +300,11 @@ main {
 .card-title .icon { font-size: 14px; }
 
 .card-badge {
-  font-size: 10px;
-  padding: 2px 8px;
+  font-size: 12px;
+  padding: 4px 8px;
   border-radius: 10px;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: 0.03em;
 }
 
 .card-body { padding: 8px 10px; }
@@ -800,7 +868,7 @@ main {
 /* ─── Wind chart interaction ─────────────────────────────────────────────── */
 .wind-chart-container {
   position: relative;
-  touch-action: none;
+  touch-action: pan-y;
   cursor: crosshair;
 }
 .wind-crosshair {
