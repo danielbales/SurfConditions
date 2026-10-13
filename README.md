@@ -6,11 +6,11 @@ Real-time surf conditions for Monterey Bay — Progressive Web App edition.
 
 | Card | Source | API |
 |------|--------|-----|
-| NOAA Buoy 46042 | NDBC realtime text | `ndbc.noaa.gov/data/realtime2/46042.txt` |
+| Nearest NDBC buoy | NDBC via the Cloudflare relay | Carmel / Asilomar / Moss Landing: 46236 Monterey Canyon. Big Sur: 46239 Point Sur. Steamer Lane: 46253 Santa Cruz |
 | Swell Forecast | Open-Meteo Marine | `marine-api.open-meteo.com` |
-| Wind | Open-Meteo Weather | `api.open-meteo.com` |
+| Wind | The buoy, when it reports wind. Otherwise Open-Meteo at the beach | `api.open-meteo.com` |
 | UV Index | Open-Meteo Weather | `api.open-meteo.com` |
-| Tides | NOAA Tides & Currents | Station 9413450 (Monterey Harbor) |
+| Tides | NOAA Tides & Currents | Carmel and Big Sur: 9413375 Carmel Cove. Asilomar: 9413450 Monterey Harbor. Steamer Lane: 9413745 Santa Cruz. Moss Landing: 9413616 Moss Landing |
 | Sunrise / Sunset | Sunrise-Sunset.org | `api.sunrise-sunset.org` |
 | Moon Phase | Local calculation | Lunar cycle algorithm (no API) |
 | Marine Forecast | NWS | Zone PZZ535 (Monterey Bay) |
@@ -20,14 +20,18 @@ All sources are free with no API keys required.
 
 ## Installing on Android (Pixel 9 / Chrome)
 
+The live app is **https://danielbales.github.io/SurfConditions/**
+
+GitHub Pages serves the `web` folder as the site root, so the address does not include `/web`.
+
 1. Open **Chrome** on your Pixel 9
-2. Navigate to the hosted URL (e.g. `https://yourname.github.io/SurfConditions/web/`)
+2. Go to **https://danielbales.github.io/SurfConditions/**
 3. Tap the **three-dot menu** (⋮) in the top-right corner
 4. Tap **"Add to Home screen"**
-5. Confirm the name ("Surf Conditions") and tap **Add**
+5. Confirm the name ("Waves") and tap **Add**
 6. The app icon appears on your home screen — tap it to launch in standalone mode
 
-The app works offline after the first load (app shell is cached by the service worker). Live data requires a network connection and auto-refreshes every 10 minutes.
+The icon is a PNG, which Android uses for the home-screen shortcut. The app shell is cached after the first load. Live readings need a connection and refresh every 10 minutes. If you open the app offline, each beach shows the last good wave, wind, and tide reading it saved.
 
 ## Hosting on GitHub Pages
 
@@ -60,11 +64,12 @@ npx serve .
 web/
 ├── index.html      # Single-page app shell
 ├── style.css       # Dark ocean theme
+├── spot-stations.js # Built-in beaches and their buoy / tide stations
 ├── app.js          # All data fetching & rendering
 ├── manifest.json   # PWA manifest
 ├── sw.js           # Service worker (offline cache)
 ├── icons/
-│   ├── icon-192.svg
-│   └── icon-512.svg
+│   ├── icon-192.png
+│   └── icon-512.png
 └── README.md
 ```
